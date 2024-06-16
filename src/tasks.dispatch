@@ -37,8 +37,8 @@
             ],
             "params": [
                 {
-                    "name": "paramA",
-                    "type": "bool",
+                    "name": "majere",
+                    "type": "string",
                     "mandatory": true,
                     "default": "10"
                 }

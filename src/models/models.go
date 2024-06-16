@@ -18,12 +18,19 @@ type ConfigCommand struct {
 	Conditions []ConfigCondition `json:"conditions,omitempty"`
 }
 
+type ConfiguredParamValue struct {
+	Type string // choices: string, int, bool
+	Value string
+}
+
+
 type ConfigParam struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Type        string `json:"type"` // choices: string, int, bool
 	Default     string `json:"default"`
 	Mandatory   bool   `json:"mandatory"`
+	Value       string
 }
 
 type ConfigTask struct {
@@ -95,8 +102,18 @@ func (configuration *Configuration) AddParam(param string, value ConfigParam) *C
 }
 
 func BuildConfiguration(configFiles []ConfigFile) Configuration {
-	configFile := configFiles[0]
-	for _, innerConfig := range configFiles[1:] {
+	// configure default tasks
+	configFile := ConfigFile{
+		Envs: []string{},
+		Tasks: []ConfigTask{
+			ConfigTask{
+				Name:"help",
+				Description:"Show 'dispatch' help",
+				Commands:[]ConfigCommand{},
+			},
+		},
+	}
+	for _, innerConfig := range configFiles {
 		configFile = configFile.Combine(innerConfig)
 	}
 
