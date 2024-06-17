@@ -9,7 +9,7 @@
             "description": "task A, description",
             "commands": [
                 {
-                    "command": "echo 'task-a' command-1",
+                    "command": "touch task-a",
                     "conditions": [
                         {
                             "variable": "pepe",
@@ -19,7 +19,7 @@
                     ]
                 },
                 {
-                    "command": "echo 'task-a' command-2"
+                    "command": "rm task-a"
                 }
             ]
         },

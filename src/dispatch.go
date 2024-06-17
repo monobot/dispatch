@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 
@@ -73,8 +74,19 @@ func main() {
 			if helpBeingRequested {
 				taskToRun.Help()
 			} else {
-				for _, command := range taskToRun.Commands {
-					fmt.Printf("%s\n", command.Command)
+				for _, calculatedCommand := range taskToRun.CalculateCommands() {
+					if len(calculatedCommand) > 0 {
+						fmt.Printf("%v %v\n", calculatedCommand, len(calculatedCommand))
+						fmt.Println(strings.Join(calculatedCommand, " "))
+						baseCmd := calculatedCommand[0]
+						cmdArgs := calculatedCommand[1:]
+
+						cmd := exec.Command(baseCmd, cmdArgs...)
+						_, err := cmd.Output()
+						if err != nil {
+							panic(err)
+						}
+					}
 				}
 			}
 		}

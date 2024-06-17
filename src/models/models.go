@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"reflect"
+	"strings"
 
 	"github.com/monobot/dispatch/src/environment"
 
@@ -20,6 +21,11 @@ type ConfigCondition struct {
 type ConfigCommand struct {
 	Command    string            `json:"command"`
 	Conditions []ConfigCondition `json:"conditions,omitempty"`
+}
+
+func (configCommand ConfigCommand) CalculateCommands() []string {
+	// check that the condition is met
+	return strings.Fields(configCommand.Command)
 }
 
 type ConfiguredParamValue struct {
@@ -47,6 +53,15 @@ type ConfigTask struct {
 
 func (task ConfigTask) Help() {
 	PrintHelpTasks(task, Configuration{}, 0, true)
+}
+
+func (task ConfigTask) CalculateCommands() [][]string {
+	calculatedCommands := [][]string{}
+	for _, command := range task.Commands {
+		calculatedCommands = append(calculatedCommands, command.CalculateCommands())
+	}
+
+	return calculatedCommands
 }
 
 type ConfigFile struct {
