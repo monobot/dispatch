@@ -2,14 +2,12 @@ package main
 
 import (
 	"fmt"
-	"strings"
-	"regexp"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/monobot/dispatch/src/discovery"
 	"github.com/monobot/dispatch/src/models"
-	// "golang.org/x/exp/slices"
-	"github.com/monobot/dispatch/src/tasks"
 )
 
 func parseCommandLineArgs() ([]string, map[string]string) {
@@ -24,7 +22,14 @@ func parseCommandLineArgs() ([]string, map[string]string) {
 			param = strings.TrimPrefix(param, "-")
 			equal := regexp.MustCompile(`=`)
 			taskNameSplit := equal.Split(param, -1)
-			parsedParams[taskNameSplit[0]] = taskNameSplit[1]
+			if len(taskNameSplit) == 1 {
+				parsedParams[taskNameSplit[0]] = ""
+			} else {
+				if len(taskNameSplit) > 2 {
+					panic("Invalid param")
+				}
+				parsedParams[taskNameSplit[0]] = taskNameSplit[1]
+			}
 		}
 	}
 
@@ -54,22 +59,22 @@ func main() {
 			if !ok {
 				value = param.Default
 			}
-			configuredParamValues[param.Name] = models.ConfiguredParamValue{Value:value, Type:paramType}
+			configuredParamValues[param.Name] = models.ConfiguredParamValue{Value: value, Type: paramType}
 		}
 	}
 
 	// RUN TASKS
 	for _, taskName := range tasksRequested {
 		taskToRun := configuration.Tasks[taskName]
+		_, helpBeingRequested := parsedParams["help"]
 		if taskName == "help" {
-			tasks.Help(configuration)
+			models.Help(configuration)
 		} else {
-			if true {
+			if helpBeingRequested {
 				taskToRun.Help()
 			} else {
 				for _, command := range taskToRun.Commands {
-					fmt.Printf("%s\n",command.Command)
-					fmt.Printf("%v\n",taskToRun.Params[0].Value)
+					fmt.Printf("%s\n", command.Command)
 				}
 			}
 		}

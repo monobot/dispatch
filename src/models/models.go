@@ -3,7 +3,11 @@ package models
 import (
 	"fmt"
 
+	"reflect"
+
 	"github.com/monobot/dispatch/src/environment"
+
+	"github.com/fatih/color"
 	"golang.org/x/exp/slices"
 )
 
@@ -19,10 +23,9 @@ type ConfigCommand struct {
 }
 
 type ConfiguredParamValue struct {
-	Type string // choices: string, int, bool
+	Type  string // choices: string, int, bool
 	Value string
 }
-
 
 type ConfigParam struct {
 	Name        string `json:"name"`
@@ -43,12 +46,7 @@ type ConfigTask struct {
 }
 
 func (task ConfigTask) Help() {
-	fmt.Printf("%s:\n", task.Name)
-	fmt.Printf("  description: %s\n", task.Description)
-	fmt.Println("  params accepted:\n", task.Description)
-	for _, param := range task.Params {
-		fmt.Printf("    %s\n", param.Name)
-	}
+	PrintHelpTasks(task, Configuration{}, 0, true)
 }
 
 type ConfigFile struct {
@@ -106,10 +104,10 @@ func BuildConfiguration(configFiles []ConfigFile) Configuration {
 	configFile := ConfigFile{
 		Envs: []string{},
 		Tasks: []ConfigTask{
-			ConfigTask{
-				Name:"help",
-				Description:"Show 'dispatch' help",
-				Commands:[]ConfigCommand{},
+			{
+				Name:        "help",
+				Description: "Show this help",
+				Commands:    []ConfigCommand{},
 			},
 		},
 	}
@@ -139,5 +137,120 @@ func BuildConfiguration(configFiles []ConfigFile) Configuration {
 		Params:     make(map[string]ConfigParam),
 		Tasks:      tasks,
 		Groups:     groups,
+	}
+}
+
+func getIndentString(nestCount int) string {
+	indent := ""
+	for i := 0; i < nestCount; i++ {
+		indent += "    "
+	}
+	return indent
+}
+
+func PrintHelpCondition(condition ConfigCondition, configuration Configuration, indentCount int, detailed bool) {
+	indentString := getIndentString(indentCount)
+
+	allowance := "Deny"
+	if condition.Allowance {
+		allowance = "Allow"
+	}
+
+	fmt.Printf("%s        When "+color.RedString(condition.Variable)+" equals "+color.RedString(condition.Value)+" then "+color.RedString(allowance)+"\n", indentString)
+}
+
+func PrintHelpCommand(command ConfigCommand, configuration Configuration, indentCount int, detailed bool) {
+	indentString := getIndentString(indentCount)
+
+	fmt.Printf("%s    %s\n", indentString, command.Command)
+	if len(command.Conditions) > 0 {
+		fmt.Printf("%s        Conditions:\n", indentString)
+		for _, condition := range command.Conditions {
+			PrintHelpCondition(condition, configuration, indentCount+1, detailed)
+		}
+	}
+}
+
+func PrintHelpEnvironment(environment string, configuration Configuration, indentCount int, detailed bool) {
+	indentString := getIndentString(indentCount)
+
+	fmt.Printf("%s    %s\n", indentString, environment)
+}
+
+func PrintHelpParams(param ConfigParam, configuration Configuration, indentCount int, detailed bool) {
+	indentString := getIndentString(indentCount)
+
+	fmt.Printf("%s    %s\n", indentString, param.Name)
+	if param.Description != "" {
+		fmt.Printf("%s        %s\n", indentString, param.Description)
+	}
+	if param.Type != "" {
+		fmt.Printf("%s        type: %s\n", indentString, param.Type)
+	}
+	if param.Default != "" {
+		fmt.Printf("%s        default: %s\n", indentString, param.Default)
+	}
+	if param.Mandatory {
+		fmt.Printf("%s        mandatory: %v\n", indentString, param.Mandatory)
+	}
+}
+
+func PrintHelpTasks(task ConfigTask, configuration Configuration, indentCount int, detailed bool) {
+	indentString := getIndentString(indentCount)
+
+	fmt.Printf("%s"+color.BlueString(task.Name)+":\n", indentString)
+	if task.Description != "" {
+		fmt.Printf("%s    %s\n", indentString, task.Description)
+	}
+	if detailed {
+		if len(task.Commands) > 0 {
+			color.Cyan("%s    Commands:\n", indentString)
+			for _, command := range task.Commands {
+				PrintHelpCommand(command, configuration, indentCount+1, detailed)
+			}
+		}
+		if len(task.Envs) > 0 {
+			color.Cyan("%s    Environments:\n", indentString)
+			for _, env := range task.Envs {
+				PrintHelpEnvironment(env, configuration, indentCount+1, detailed)
+			}
+		}
+		if len(task.Params) > 0 {
+			color.Cyan("%s    Params:\n", indentString)
+			for _, param := range task.Params {
+				PrintHelpParams(param, configuration, indentCount+1, detailed)
+			}
+		}
+	}
+	fmt.Println("")
+}
+
+func PrintHelpGroupTasks(groupTasks []string, configuration Configuration, indentCount int, detailed bool) {
+	for _, taskName := range groupTasks {
+		task := configuration.Tasks[taskName]
+		PrintHelpTasks(task, configuration, indentCount, detailed)
+	}
+}
+
+func Help(configuration Configuration) {
+	// Print help message
+	fmt.Println("")
+	title := color.New(color.FgRed).Add(color.Bold)
+	title.Println("THIS IS 'dispatch' HELP.")
+	fmt.Println(("You can find more information on how to build and configure your own dispatch tasks, here:"))
+	fmt.Println(("    TODO"))
+	fmt.Println((""))
+
+	indentCount := 0
+	if len(configuration.Groups) > 1 {
+		indentCount += 1
+	}
+	groupNames := reflect.ValueOf(configuration.Groups).MapKeys()
+	for _, groupName := range groupNames {
+		groupTasks := configuration.Groups[groupName.String()]
+		if len(configuration.Groups) > 1 {
+			color.Yellow("%s:\n", groupName)
+		}
+		PrintHelpGroupTasks(groupTasks, configuration, indentCount, false)
 	}
 }
