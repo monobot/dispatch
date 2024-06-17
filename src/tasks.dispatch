@@ -21,6 +21,10 @@
                 {
                     "command": "rm task-a"
                 }
+            ],
+            "envs": [
+                "HOLA",
+                "ADIOS"
             ]
         },
         {

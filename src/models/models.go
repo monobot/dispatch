@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"reflect"
+	"os/exec"
 	"strings"
 
 	"github.com/monobot/dispatch/src/environment"
@@ -18,9 +19,34 @@ type ConfigCondition struct {
 	Allowance bool   `json:"allowance"`
 }
 
+func (configCondition ConfigCondition) Help(indentCount int) {
+
+	indentString := getIndentString(indentCount)
+
+	allowance := "Deny"
+	if configCondition.Allowance {
+		allowance = "Allow"
+	}
+
+	fmt.Printf( "%s    When " +color.RedString(configCondition.Variable) + " equals " +color.RedString(configCondition.Value) +" then "+color.RedString(allowance) +"\n", indentString )
+}
+
 type ConfigCommand struct {
 	Command    string            `json:"command"`
 	Conditions []ConfigCondition `json:"conditions,omitempty"`
+	Allowed    bool
+}
+
+func (configCommand ConfigCommand) Help(indentCount int) {
+	indentString := getIndentString(indentCount)
+
+	fmt.Printf("%s    - \"%s\"\n", indentString, configCommand.Command)
+	if len(configCommand.Conditions) > 0 {
+		fmt.Printf("%s    Conditions:\n", indentString)
+		for _, condition := range configCommand.Conditions {
+			condition.Help(indentCount+1)
+		}
+	}
 }
 
 func (configCommand ConfigCommand) CalculateCommands() []string {
@@ -42,6 +68,24 @@ type ConfigParam struct {
 	Value       string
 }
 
+func (configParam ConfigParam) Help (indentCount int) {
+	indentString := getIndentString(indentCount)
+
+	fmt.Printf("%s    %s\n", indentString, configParam.Name)
+	if configParam.Description != "" {
+		fmt.Printf("%s        %s\n", indentString, configParam.Description)
+	}
+	if configParam.Type != "" {
+		fmt.Printf("%s        type: %s\n", indentString, configParam.Type)
+	}
+	if configParam.Default != "" {
+		fmt.Printf("%s        default: %s\n", indentString, configParam.Default)
+	}
+	if configParam.Mandatory {
+		fmt.Printf("%s        mandatory: %v\n", indentString, configParam.Mandatory)
+	}
+}
+
 type ConfigTask struct {
 	Name        string          `json:"name"`
 	Group       string          `group:"name"`
@@ -51,8 +95,69 @@ type ConfigTask struct {
 	Params      []ConfigParam   `json:"params,omitempty"`
 }
 
-func (task ConfigTask) Help() {
-	PrintHelpTasks(task, Configuration{}, 0, true)
+func (task ConfigTask) Help(indentCount int, detailed bool) {
+	indentString := getIndentString(indentCount)
+
+	fmt.Printf("%s"+color.BlueString(task.Name)+":\n", indentString)
+	if task.Description != "" {
+		fmt.Printf("%s    %s\n", indentString, task.Description)
+	}
+	if detailed {
+		if len(task.Commands) > 0 {
+			color.Cyan("%s    Commands:\n", indentString)
+			for _, command := range task.Commands {
+				command.Help(indentCount+1)
+			}
+		}
+		if len(task.Envs) > 0 {
+			color.Cyan("%s    Environments:\n", indentString)
+			environments := strings.Join(task.Envs, ", ")
+			fmt.Printf("%s        %s\n", indentString, environments)
+		}
+		if len(task.Params) > 0 {
+			color.Cyan("%s    Params:\n", indentString)
+			for _, param := range task.Params {
+				param.Help(indentCount+1)
+			}
+		}
+	}
+	fmt.Println("")
+}
+
+func (task ConfigTask) Run() {
+	for _, calculatedCommand := range task.CalculateCommands() {
+		if len(calculatedCommand) > 0 {
+			fmt.Println(strings.Join(calculatedCommand, " "))
+			baseCmd := calculatedCommand[0]
+			cmdArgs := calculatedCommand[1:]
+
+			out, err := exec.Command(baseCmd, cmdArgs...).Output()
+			if err != nil {
+				fmt.Printf("%s",err)
+			}
+			if out != nil {
+				fmt.Printf("%s",out)
+			}
+		}
+	}
+}
+
+func (task ConfigTask) CalculateCommandsAllowance() {
+	for _, command := range task.Commands {
+		allowance := true
+		for _, condition := range command.Conditions {
+			allowed := true
+			if condition.Allowance {
+				allowed = condition.Variable == condition.Value
+			} else {
+				allowed = condition.Variable != condition.Value
+			}
+			if allowance && !allowed {
+				allowance = allowed
+			}
+		}
+		command.Allowed = allowance
+	}
 }
 
 func (task ConfigTask) CalculateCommands() [][]string {
@@ -148,10 +253,10 @@ func BuildConfiguration(configFiles []ConfigFile) Configuration {
 
 	return Configuration{
 		ConfigFile: configFile,
-		Envs:       environment.PopulateVariables(configFile.Envs),
-		Params:     make(map[string]ConfigParam),
-		Tasks:      tasks,
-		Groups:     groups,
+		Envs:          environment.PopulateVariables(configFile.Envs),
+		Params:        make(map[string]ConfigParam),
+		Tasks:         tasks,
+		Groups:        groups,
 	}
 }
 
@@ -163,87 +268,10 @@ func getIndentString(nestCount int) string {
 	return indent
 }
 
-func PrintHelpCondition(condition ConfigCondition, configuration Configuration, indentCount int, detailed bool) {
-	indentString := getIndentString(indentCount)
-
-	allowance := "Deny"
-	if condition.Allowance {
-		allowance = "Allow"
-	}
-
-	fmt.Printf("%s        When "+color.RedString(condition.Variable)+" equals "+color.RedString(condition.Value)+" then "+color.RedString(allowance)+"\n", indentString)
-}
-
-func PrintHelpCommand(command ConfigCommand, configuration Configuration, indentCount int, detailed bool) {
-	indentString := getIndentString(indentCount)
-
-	fmt.Printf("%s    %s\n", indentString, command.Command)
-	if len(command.Conditions) > 0 {
-		fmt.Printf("%s        Conditions:\n", indentString)
-		for _, condition := range command.Conditions {
-			PrintHelpCondition(condition, configuration, indentCount+1, detailed)
-		}
-	}
-}
-
-func PrintHelpEnvironment(environment string, configuration Configuration, indentCount int, detailed bool) {
-	indentString := getIndentString(indentCount)
-
-	fmt.Printf("%s    %s\n", indentString, environment)
-}
-
-func PrintHelpParams(param ConfigParam, configuration Configuration, indentCount int, detailed bool) {
-	indentString := getIndentString(indentCount)
-
-	fmt.Printf("%s    %s\n", indentString, param.Name)
-	if param.Description != "" {
-		fmt.Printf("%s        %s\n", indentString, param.Description)
-	}
-	if param.Type != "" {
-		fmt.Printf("%s        type: %s\n", indentString, param.Type)
-	}
-	if param.Default != "" {
-		fmt.Printf("%s        default: %s\n", indentString, param.Default)
-	}
-	if param.Mandatory {
-		fmt.Printf("%s        mandatory: %v\n", indentString, param.Mandatory)
-	}
-}
-
-func PrintHelpTasks(task ConfigTask, configuration Configuration, indentCount int, detailed bool) {
-	indentString := getIndentString(indentCount)
-
-	fmt.Printf("%s"+color.BlueString(task.Name)+":\n", indentString)
-	if task.Description != "" {
-		fmt.Printf("%s    %s\n", indentString, task.Description)
-	}
-	if detailed {
-		if len(task.Commands) > 0 {
-			color.Cyan("%s    Commands:\n", indentString)
-			for _, command := range task.Commands {
-				PrintHelpCommand(command, configuration, indentCount+1, detailed)
-			}
-		}
-		if len(task.Envs) > 0 {
-			color.Cyan("%s    Environments:\n", indentString)
-			for _, env := range task.Envs {
-				PrintHelpEnvironment(env, configuration, indentCount+1, detailed)
-			}
-		}
-		if len(task.Params) > 0 {
-			color.Cyan("%s    Params:\n", indentString)
-			for _, param := range task.Params {
-				PrintHelpParams(param, configuration, indentCount+1, detailed)
-			}
-		}
-	}
-	fmt.Println("")
-}
-
 func PrintHelpGroupTasks(groupTasks []string, configuration Configuration, indentCount int, detailed bool) {
 	for _, taskName := range groupTasks {
 		task := configuration.Tasks[taskName]
-		PrintHelpTasks(task, configuration, indentCount, detailed)
+		task.Help(indentCount, detailed)
 	}
 }
 
@@ -256,6 +284,12 @@ func Help(configuration Configuration) {
 	fmt.Println(("    TODO"))
 	fmt.Println((""))
 
+	// enviornments
+	color.Yellow("Environments:\n")
+	environments := strings.Join(configuration.ConfigFile.Envs, ", ")
+	fmt.Printf("    %s\n\n", environments)
+
+	// tasks
 	indentCount := 0
 	if len(configuration.Groups) > 1 {
 		indentCount += 1

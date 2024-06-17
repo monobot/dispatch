@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 
@@ -39,6 +38,7 @@ func parseCommandLineArgs() ([]string, map[string]string) {
 	}
 	return tasksRequested, parsedParams
 }
+
 func main() {
 	configuration := models.BuildConfiguration(discovery.TaskDiscovery())
 
@@ -72,24 +72,10 @@ func main() {
 			models.Help(configuration)
 		} else {
 			if helpBeingRequested {
-				taskToRun.Help()
+				taskToRun.Help(0, true)
 			} else {
-				for _, calculatedCommand := range taskToRun.CalculateCommands() {
-					if len(calculatedCommand) > 0 {
-						fmt.Printf("%v %v\n", calculatedCommand, len(calculatedCommand))
-						fmt.Println(strings.Join(calculatedCommand, " "))
-						baseCmd := calculatedCommand[0]
-						cmdArgs := calculatedCommand[1:]
-
-						cmd := exec.Command(baseCmd, cmdArgs...)
-						_, err := cmd.Output()
-						if err != nil {
-							panic(err)
-						}
-					}
-				}
+				taskToRun.Run()
 			}
 		}
 	}
-
 }
