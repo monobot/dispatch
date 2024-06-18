@@ -51,7 +51,7 @@ func (command Command) Help(indentCount int) {
 	}
 }
 
-func (command Command) Run(configuration Configuration) {
+func (command Command) Run(configuration *Configuration) {
 	allowance := true
 	for _, condition := range command.Conditions {
 		parsedValue := configuration.ParsedParams[condition.Variable]
@@ -81,16 +81,18 @@ func (command Command) Run(configuration Configuration) {
 	}
 	runCommand := outputBytes.String()
 
+
 	if allowance {
+		if configuration.HasFlag("verbose") {
+			fmt.Printf("running: \"%s\"\n", runCommand)
+		}
+
 		splittedCommand := strings.Fields(runCommand)
 
 		if len(splittedCommand) > 0 {
 			baseCmd := splittedCommand[0]
 			cmdArgs := splittedCommand[1:]
 
-			if configuration.HasFlag("verbose") {
-				fmt.Printf("running: %s\n", strings.Join(splittedCommand, " "))
-			}
 			out, err := exec.Command(baseCmd, cmdArgs...).Output()
 			if err != nil {
 				fmt.Printf("%s", err)
@@ -98,6 +100,10 @@ func (command Command) Run(configuration Configuration) {
 			if out != nil {
 				fmt.Printf("%s", out)
 			}
+		}
+	} else {
+		if configuration.HasFlag("verbose") {
+			fmt.Printf("Command \"%s\" not run, some condition not met\n", runCommand)
 		}
 	}
 }
@@ -158,9 +164,30 @@ func (task Task) Help(indentCount int, detailed bool) {
 	fmt.Println("")
 }
 
-func (task Task) Run(configuration Configuration) {
-	for _, command := range task.Commands {
-		command.Run(configuration)
+func (task Task) Run(configuration *Configuration) {
+	allowance := true
+	for _, param := range task.Params {
+		allowed := true
+
+		if param.Mandatory {
+			allowed = configuration.HasFlag(param.Name)
+
+			if configuration.HasFlag("verbose") {
+				fmt.Printf("task \"%s\" not run, parameter \"%s\" is mandatory\n", task.Name, param.Name)
+			}
+		}
+
+		if allowance && !allowed {
+			allowance = allowed
+		}
+	}
+
+	if allowance {
+		for _, command := range task.Commands {
+			// check params condition met
+
+			command.Run(configuration)
+		}
 	}
 }
 
@@ -221,7 +248,7 @@ func (configuration *Configuration) HasFlag(flag string) bool {
 	return ok
 }
 
-func BuildConfiguration(configFiles []ConfigFile, parsedParams map[string]string) Configuration {
+func BuildConfiguration(configFiles []ConfigFile, parsedParams map[string]string) *Configuration {
 	// configure default tasks
 	configFile := ConfigFile{
 		Envs: []string{},
@@ -253,7 +280,7 @@ func BuildConfiguration(configFiles []ConfigFile, parsedParams map[string]string
 		groups[taskGroup] = append(currentGroupTasks, task.Name)
 	}
 
-	return Configuration{
+	return &Configuration{
 		ConfigFile:   configFile,
 		Envs:         environment.PopulateVariables(configFile.Envs),
 		Params:       make(map[string]Parameter),
@@ -271,14 +298,14 @@ func getIndentString(nestCount int) string {
 	return indent
 }
 
-func PrintHelpGroupTasks(groupTasks []string, configuration Configuration, indentCount int, detailed bool) {
+func PrintHelpGroupTasks(groupTasks []string, configuration *Configuration, indentCount int, detailed bool) {
 	for _, taskName := range groupTasks {
 		task := configuration.Tasks[taskName]
 		task.Help(indentCount, detailed)
 	}
 }
 
-func Help(configuration Configuration) {
+func Help(configuration *Configuration) {
 	// Print help message
 	fmt.Println("")
 	title := color.New(color.FgRed).Add(color.Bold)

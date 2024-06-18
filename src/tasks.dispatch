@@ -28,6 +28,13 @@
             "envs": [
                 "HOLA",
                 "ADIOS"
+            ],
+            "params": [
+                {
+                    "name": "param",
+                    "default": "hola",
+                    "mandatory": true
+                }
             ]
         },
         {
@@ -41,13 +48,6 @@
             ],
             "envs": [
                 "ADIOS"
-            ],
-            "params": [
-                {
-                    "variable": "param",
-                    "mandatory": true,
-                    "default": "10"
-                }
             ]
         },
         {
