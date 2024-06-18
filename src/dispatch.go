@@ -23,21 +23,22 @@ func parseCommandLineArgs() ([]string, map[string]string) {
 			equal := regexp.MustCompile(`=`)
 			taskNameSplit := equal.Split(param, -1)
 
-			if param == "h" {
-				param = "help"
+			paramName := taskNameSplit[0]
+			if paramName == "h" {
+				paramName = "help"
 			}
 
-			if param == "v" {
-				param = "verbose"
+			if paramName == "v" {
+				paramName = "verbose"
 			}
 
 			if len(taskNameSplit) == 1 {
-				parsedParams[taskNameSplit[0]] = ""
+				parsedParams[paramName] = ""
 			} else {
 				if len(taskNameSplit) > 2 {
 					panic("Invalid param")
 				}
-				parsedParams[taskNameSplit[0]] = taskNameSplit[1]
+				parsedParams[paramName] = taskNameSplit[1]
 			}
 		}
 	}
@@ -53,7 +54,7 @@ func main() {
 	configuration := models.BuildConfiguration(discovery.TaskDiscovery(), parsedParams)
 
 	// COLLECT VALUES FOR ALL THE PARAMS
-	configuredParamValues := map[string]models.ParamValue{}
+	configuredParamValues := map[string]string{}
 
 	for _, taskName := range tasksRequested {
 		taskToRun, ok := configuration.Tasks[taskName]
@@ -64,22 +65,21 @@ func main() {
 
 		for _, param := range taskToRun.Params {
 			value, ok := parsedParams[param.Name]
-			paramType := param.Type
 			if !ok {
 				value = param.Default
 			}
-			configuredParamValues[param.Name] = models.ParamValue{Value: value, Type: paramType}
+			configuredParamValues[param.Name] = value
 		}
 	}
 
 	// RUN TASKS
 	for _, taskName := range tasksRequested {
 		taskToRun := configuration.Tasks[taskName]
-		_, helpBeingRequested := parsedParams["help"]
+
 		if taskName == "help" {
 			models.Help(configuration)
 		} else {
-			if helpBeingRequested {
+			if configuration.HasFlag("help") {
 				taskToRun.Help(0, true)
 			} else {
 				taskToRun.Run(configuration)

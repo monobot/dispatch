@@ -44,8 +44,7 @@
             ],
             "params": [
                 {
-                    "name": "majere",
-                    "type": "string",
+                    "variable": "param",
                     "mandatory": true,
                     "default": "10"
                 }

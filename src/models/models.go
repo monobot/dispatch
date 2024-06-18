@@ -88,7 +88,9 @@ func (command Command) Run(configuration Configuration) {
 			baseCmd := splittedCommand[0]
 			cmdArgs := splittedCommand[1:]
 
-			fmt.Println(strings.Join(splittedCommand, " "))
+			if configuration.HasFlag("verbose") {
+				fmt.Printf("running: %s\n", strings.Join(splittedCommand, " "))
+			}
 			out, err := exec.Command(baseCmd, cmdArgs...).Output()
 			if err != nil {
 				fmt.Printf("%s", err)
@@ -100,31 +102,16 @@ func (command Command) Run(configuration Configuration) {
 	}
 }
 
-
-type ParamValue struct {
-	Type  string // choices: string, int, bool
-	Value string
-}
-
 type Parameter struct {
 	Name        string `json:"name" yaml:"name"`
-	Description string `json:"description" yaml:"description"`
-	Type        string `json:"type"` // choices: string, int, boo `json:"type"` // choices: string, int, bool
 	Default     string `json:"default" yaml:"default"`
 	Mandatory   bool   `json:"mandatory" yaml:"mandatory"`
-	Value       string
 }
 
 func (param Parameter) Help(indentCount int) {
 	indentString := getIndentString(indentCount)
 
 	fmt.Printf("%s    %s\n", indentString, param.Name)
-	if param.Description != "" {
-		fmt.Printf("%s        %s\n", indentString, param.Description)
-	}
-	if param.Type != "" {
-		fmt.Printf("%s        type: %s\n", indentString, param.Type)
-	}
 	if param.Default != "" {
 		fmt.Printf("%s        default: %s\n", indentString, param.Default)
 	}
@@ -229,7 +216,7 @@ func (configuration *Configuration) AddParam(param string, value Parameter) *Con
 	return configuration
 }
 func (configuration *Configuration) HasFlag(flag string) bool {
-	_, ok := configuration.Params[flag]
+	_, ok := configuration.ParsedParams[flag]
 
 	return ok
 }
