@@ -1,0 +1,12 @@
+envs:
+    - HOLA2
+tasks:
+    - name: task-yaml
+      group: TASKS
+      description: task A, description
+      commands:
+        - command: echo {{.param}}
+    - name: new-1
+      description: no real description
+      commands:
+        - command: echo '{{.param}} B'

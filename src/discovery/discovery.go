@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"encoding/json"
+	"gopkg.in/yaml.v3"
 	"fmt"
 	"io"
 	"os"
@@ -28,7 +29,12 @@ func readConfigurationFile(filePath string) *models.ConfigFile {
 	configFileStruct := models.ConfigFile{}
 	err = json.Unmarshal(data, &configFileStruct)
 	if err != nil {
-		fmt.Println(err)
+		configFileStruct = models.ConfigFile{}
+		err = yaml.Unmarshal(data, &configFileStruct)
+
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 
 	return &configFileStruct

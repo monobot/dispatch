@@ -5,7 +5,9 @@ import (
 
 	"os/exec"
 	"reflect"
+	"text/template"
 	"strings"
+	"bytes"
 
 	"github.com/monobot/dispatch/src/environment"
 
@@ -13,89 +15,134 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-type ConfigCondition struct {
-	Variable  string `json:"variable"`
-	Value     string `json:"value"`
-	Allowance bool   `json:"allowance"`
+type Condition struct {
+	Variable  string `json:"variable" yaml:"variable"`
+	Value     string `json:"value" yaml:"value"`
+	Allowance bool   `json:"allowance" yaml:"allowance"`
 }
 
-func (configCondition ConfigCondition) Help(indentCount int) {
+func (condition Condition) Help(indentCount int) {
 
 	indentString := getIndentString(indentCount)
 
 	allowance := "Deny"
-	if configCondition.Allowance {
+	if condition.Allowance {
 		allowance = "Allow"
 	}
 
-	fmt.Printf("%s    When "+color.RedString(configCondition.Variable)+" equals "+color.RedString(configCondition.Value)+" then "+color.RedString(allowance)+"\n", indentString)
+	fmt.Printf("%s    When "+color.RedString(condition.Variable)+" equals "+color.RedString(condition.Value)+" then "+color.RedString(allowance)+"\n", indentString)
 }
 
-type ConfigCommand struct {
-	Command    string            `json:"command"`
-	Conditions []ConfigCondition `json:"conditions,omitempty"`
+type Command struct {
+	Command    string            `json:"command" yaml:"command"`
+	Conditions []Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
 	Allowed    bool
 }
 
-func (configCommand ConfigCommand) Help(indentCount int) {
+func (command Command) Help(indentCount int) {
 	indentString := getIndentString(indentCount)
 
-	fmt.Printf("%s    - \"%s\"\n", indentString, configCommand.Command)
-	if len(configCommand.Conditions) > 0 {
+	fmt.Printf("%s    - \"%s\"\n", indentString, command.Command)
+	if len(command.Conditions) > 0 {
 		fmt.Printf("%s    Conditions:\n", indentString)
-		for _, condition := range configCommand.Conditions {
+		for _, condition := range command.Conditions {
 			condition.Help(indentCount + 1)
 		}
 	}
 }
 
-func (configCommand ConfigCommand) CalculateCommands() []string {
-	// check that the condition is met
-	return strings.Fields(configCommand.Command)
+func (command Command) Run(configuration Configuration) {
+	allowance := true
+	for _, condition := range command.Conditions {
+		parsedValue := configuration.ParsedParams[condition.Variable]
+		if condition != (Condition{}) {
+			allowed := false
+			if condition.Allowance {
+				allowed = parsedValue == condition.Value
+			} else {
+				allowed = parsedValue != condition.Value
+			}
+
+			if allowance && !allowed {
+				allowance = allowed
+			}
+		}
+	}
+
+	template, err := template.New("commandTemplate").Parse(command.Command)
+	if err != nil {
+		// this should not pass silently
+		fmt.Println(err)
+	}
+	var outputBytes bytes.Buffer
+	if err := template.Execute(&outputBytes, configuration.ParsedParams); err != nil {
+		// this should not pass silently
+		fmt.Println(err)
+	}
+	runCommand := outputBytes.String()
+
+	if allowance {
+		splittedCommand := strings.Fields(runCommand)
+
+		if len(splittedCommand) > 0 {
+			baseCmd := splittedCommand[0]
+			cmdArgs := splittedCommand[1:]
+
+			fmt.Println(strings.Join(splittedCommand, " "))
+			out, err := exec.Command(baseCmd, cmdArgs...).Output()
+			if err != nil {
+				fmt.Printf("%s", err)
+			}
+			if out != nil {
+				fmt.Printf("%s", out)
+			}
+		}
+	}
 }
 
-type ConfiguredParamValue struct {
+
+type ParamValue struct {
 	Type  string // choices: string, int, bool
 	Value string
 }
 
-type ConfigParam struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Type        string `json:"type"` // choices: string, int, bool
-	Default     string `json:"default"`
-	Mandatory   bool   `json:"mandatory"`
+type Parameter struct {
+	Name        string `json:"name" yaml:"name"`
+	Description string `json:"description" yaml:"description"`
+	Type        string `json:"type"` // choices: string, int, boo `json:"type"` // choices: string, int, bool
+	Default     string `json:"default" yaml:"default"`
+	Mandatory   bool   `json:"mandatory" yaml:"mandatory"`
 	Value       string
 }
 
-func (configParam ConfigParam) Help(indentCount int) {
+func (param Parameter) Help(indentCount int) {
 	indentString := getIndentString(indentCount)
 
-	fmt.Printf("%s    %s\n", indentString, configParam.Name)
-	if configParam.Description != "" {
-		fmt.Printf("%s        %s\n", indentString, configParam.Description)
+	fmt.Printf("%s    %s\n", indentString, param.Name)
+	if param.Description != "" {
+		fmt.Printf("%s        %s\n", indentString, param.Description)
 	}
-	if configParam.Type != "" {
-		fmt.Printf("%s        type: %s\n", indentString, configParam.Type)
+	if param.Type != "" {
+		fmt.Printf("%s        type: %s\n", indentString, param.Type)
 	}
-	if configParam.Default != "" {
-		fmt.Printf("%s        default: %s\n", indentString, configParam.Default)
+	if param.Default != "" {
+		fmt.Printf("%s        default: %s\n", indentString, param.Default)
 	}
-	if configParam.Mandatory {
-		fmt.Printf("%s        mandatory: %v\n", indentString, configParam.Mandatory)
+	if param.Mandatory {
+		fmt.Printf("%s        mandatory: %v\n", indentString, param.Mandatory)
 	}
 }
 
-type ConfigTask struct {
-	Name        string          `json:"name"`
-	Group       string          `group:"name"`
-	Description string          `json:"description,omitempty"`
-	Commands    []ConfigCommand `json:"commands"`
-	Envs        []string        `json:"envs,omitempty"`
-	Params      []ConfigParam   `json:"params,omitempty"`
+type Task struct {
+	Name        string       `json:"name" yaml:"name"`
+	Group       string       `json:"group" yaml:"group"`
+	Description string       `json:"description,omitempty" yaml:"description,omitempty"`
+	Commands    []Command    `json:"commands" yaml:"commands"`
+	Envs        []string     `json:"envs,omitempty" yaml:"envs,omitempty"`
+	Params      []Parameter  `json:"params,omitempty" yaml:"params,omitempty"`
 }
 
-func (task ConfigTask) Help(indentCount int, detailed bool) {
+func (task Task) Help(indentCount int, detailed bool) {
 	indentString := getIndentString(indentCount)
 
 	fmt.Printf("%s"+color.BlueString(task.Name)+":\n", indentString)
@@ -124,67 +171,16 @@ func (task ConfigTask) Help(indentCount int, detailed bool) {
 	fmt.Println("")
 }
 
-func (task ConfigTask) Run(configuration Configuration) {
-	allowances := task.CalculateCommandsAllowance(configuration)
-	fmt.Printf("ALLOWANCES: %v\n", allowances)
-	for position, calculatedCommand := range task.CalculateCommands() {
-		if len(calculatedCommand) > 0 {
-			baseCmd := calculatedCommand[0]
-			cmdArgs := calculatedCommand[1:]
-
-			allowed := allowances[position]
-			if allowed {
-				fmt.Println(strings.Join(calculatedCommand, " "))
-				out, err := exec.Command(baseCmd, cmdArgs...).Output()
-				if err != nil {
-					fmt.Printf("%s", err)
-				}
-				if out != nil {
-					fmt.Printf("%s", out)
-				}
-			}
-		}
-	}
-}
-
-func (task ConfigTask) CalculateCommandsAllowance(configuration Configuration) map[int]bool {
-	allowances := map[int]bool{}
-
-	for position, command := range task.Commands {
-		for _, condition := range command.Conditions {
-			allowance := true
-			parsedValue := configuration.ParsedParams[condition.Variable]
-			if condition != (ConfigCondition{}) {
-				allowed := false
-				if condition.Allowance {
-					allowed = parsedValue == condition.Value
-				} else {
-					allowed = parsedValue != condition.Value
-				}
-
-				if allowance && !allowed {
-					allowance = allowed
-				}
-			}
-
-			allowances[position] = allowance
-		}
-	}
-	return allowances
-}
-
-func (task ConfigTask) CalculateCommands() [][]string {
-	calculatedCommands := [][]string{}
+func (task Task) Run(configuration Configuration) {
 	for _, command := range task.Commands {
-		calculatedCommands = append(calculatedCommands, command.CalculateCommands())
+		command.Run(configuration)
 	}
-
-	return calculatedCommands
 }
+
 
 type ConfigFile struct {
-	Envs  []string     `json:"envs"`
-	Tasks []ConfigTask `json:"tasks"`
+	Envs  []string  `json:"envs" yaml:"envs"`
+	Tasks []Task    `json:"tasks" yaml:"tasks"`
 }
 
 func (config *ConfigFile) TaskNames() []string {
@@ -203,45 +199,50 @@ func (config *ConfigFile) Combine(added ConfigFile) ConfigFile {
 		}
 	}
 
-	newConfigTasks := config.Tasks
+	newTasks := config.Tasks
 	currentTaskNames := config.TaskNames()
 	for _, task := range added.Tasks {
 		if slices.Contains(currentTaskNames, task.Name) {
 			panic(fmt.Sprintf("Task names should not be duplicated!\n    Task %s is duplicated", task.Name))
 		}
-		newConfigTasks = append(newConfigTasks, task)
+		newTasks = append(newTasks, task)
 	}
 
 	return ConfigFile{
 		Envs:  combinedEnvironments,
-		Tasks: newConfigTasks,
+		Tasks: newTasks,
 	}
 }
 
 type Configuration struct {
 	ConfigFile   ConfigFile
 	Envs         map[string]string
-	Params       map[string]ConfigParam
-	Tasks        map[string]ConfigTask
+	Params       map[string]Parameter
+	Tasks        map[string]Task
 	Groups       map[string][]string
 	ParsedParams map[string]string
 }
 
-func (configuration *Configuration) AddParam(param string, value ConfigParam) *Configuration {
+func (configuration *Configuration) AddParam(param string, value Parameter) *Configuration {
 	configuration.Params[param] = value
 
 	return configuration
+}
+func (configuration *Configuration) HasFlag(flag string) bool {
+	_, ok := configuration.Params[flag]
+
+	return ok
 }
 
 func BuildConfiguration(configFiles []ConfigFile, parsedParams map[string]string) Configuration {
 	// configure default tasks
 	configFile := ConfigFile{
 		Envs: []string{},
-		Tasks: []ConfigTask{
+		Tasks: []Task{
 			{
 				Name:        "help",
 				Description: "Show this help",
-				Commands:    []ConfigCommand{},
+				Commands:    []Command{},
 			},
 		},
 	}
@@ -250,7 +251,7 @@ func BuildConfiguration(configFiles []ConfigFile, parsedParams map[string]string
 	}
 
 	groups := make(map[string][]string)
-	tasks := make(map[string]ConfigTask)
+	tasks := make(map[string]Task)
 	for _, task := range configFile.Tasks {
 		tasks[task.Name] = task
 		taskGroup := task.Group
@@ -268,7 +269,7 @@ func BuildConfiguration(configFiles []ConfigFile, parsedParams map[string]string
 	return Configuration{
 		ConfigFile:   configFile,
 		Envs:         environment.PopulateVariables(configFile.Envs),
-		Params:       make(map[string]ConfigParam),
+		Params:       make(map[string]Parameter),
 		Tasks:        tasks,
 		Groups:       groups,
 		ParsedParams: parsedParams,

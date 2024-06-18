@@ -9,24 +9,20 @@
             "description": "task A, description",
             "commands": [
                 {
+                    "command": "echo {{.param}}"
+                },
+                {
                     "command": "touch task-a",
                     "conditions": [
                         {
-                            "variable": "pepe",
+                            "variable": "param",
                             "value": "ok",
                             "allowance": false
                         }
                     ]
                 },
                 {
-                    "command": "rm task-a",
-                    "conditions": [
-                        {
-                            "variable": "pepe",
-                            "value": "ok",
-                            "allowance": true
-                        }
-                    ]
+                    "command": "rm task-a"
                 }
             ],
             "envs": [

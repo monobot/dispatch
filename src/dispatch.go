@@ -22,6 +22,15 @@ func parseCommandLineArgs() ([]string, map[string]string) {
 			param = strings.TrimPrefix(param, "-")
 			equal := regexp.MustCompile(`=`)
 			taskNameSplit := equal.Split(param, -1)
+
+			if param == "h" {
+				param = "help"
+			}
+
+			if param == "v" {
+				param = "verbose"
+			}
+
 			if len(taskNameSplit) == 1 {
 				parsedParams[taskNameSplit[0]] = ""
 			} else {
@@ -44,7 +53,7 @@ func main() {
 	configuration := models.BuildConfiguration(discovery.TaskDiscovery(), parsedParams)
 
 	// COLLECT VALUES FOR ALL THE PARAMS
-	configuredParamValues := map[string]models.ConfiguredParamValue{}
+	configuredParamValues := map[string]models.ParamValue{}
 
 	for _, taskName := range tasksRequested {
 		taskToRun, ok := configuration.Tasks[taskName]
@@ -59,7 +68,7 @@ func main() {
 			if !ok {
 				value = param.Default
 			}
-			configuredParamValues[param.Name] = models.ConfiguredParamValue{Value: value, Type: paramType}
+			configuredParamValues[param.Name] = models.ParamValue{Value: value, Type: paramType}
 		}
 	}
 
