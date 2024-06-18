@@ -19,7 +19,14 @@
                     ]
                 },
                 {
-                    "command": "rm task-a"
+                    "command": "rm task-a",
+                    "conditions": [
+                        {
+                            "variable": "pepe",
+                            "value": "ok",
+                            "allowance": true
+                        }
+                    ]
                 }
             ],
             "envs": [

@@ -40,9 +40,8 @@ func parseCommandLineArgs() ([]string, map[string]string) {
 }
 
 func main() {
-	configuration := models.BuildConfiguration(discovery.TaskDiscovery())
-
 	tasksRequested, parsedParams := parseCommandLineArgs()
+	configuration := models.BuildConfiguration(discovery.TaskDiscovery(), parsedParams)
 
 	// COLLECT VALUES FOR ALL THE PARAMS
 	configuredParamValues := map[string]models.ConfiguredParamValue{}
@@ -74,7 +73,7 @@ func main() {
 			if helpBeingRequested {
 				taskToRun.Help(0, true)
 			} else {
-				taskToRun.Run()
+				taskToRun.Run(configuration)
 			}
 		}
 	}

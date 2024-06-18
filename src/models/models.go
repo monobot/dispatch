@@ -3,8 +3,8 @@ package models
 import (
 	"fmt"
 
-	"reflect"
 	"os/exec"
+	"reflect"
 	"strings"
 
 	"github.com/monobot/dispatch/src/environment"
@@ -28,7 +28,7 @@ func (configCondition ConfigCondition) Help(indentCount int) {
 		allowance = "Allow"
 	}
 
-	fmt.Printf( "%s    When " +color.RedString(configCondition.Variable) + " equals " +color.RedString(configCondition.Value) +" then "+color.RedString(allowance) +"\n", indentString )
+	fmt.Printf("%s    When "+color.RedString(configCondition.Variable)+" equals "+color.RedString(configCondition.Value)+" then "+color.RedString(allowance)+"\n", indentString)
 }
 
 type ConfigCommand struct {
@@ -44,7 +44,7 @@ func (configCommand ConfigCommand) Help(indentCount int) {
 	if len(configCommand.Conditions) > 0 {
 		fmt.Printf("%s    Conditions:\n", indentString)
 		for _, condition := range configCommand.Conditions {
-			condition.Help(indentCount+1)
+			condition.Help(indentCount + 1)
 		}
 	}
 }
@@ -68,7 +68,7 @@ type ConfigParam struct {
 	Value       string
 }
 
-func (configParam ConfigParam) Help (indentCount int) {
+func (configParam ConfigParam) Help(indentCount int) {
 	indentString := getIndentString(indentCount)
 
 	fmt.Printf("%s    %s\n", indentString, configParam.Name)
@@ -106,7 +106,7 @@ func (task ConfigTask) Help(indentCount int, detailed bool) {
 		if len(task.Commands) > 0 {
 			color.Cyan("%s    Commands:\n", indentString)
 			for _, command := range task.Commands {
-				command.Help(indentCount+1)
+				command.Help(indentCount + 1)
 			}
 		}
 		if len(task.Envs) > 0 {
@@ -117,47 +117,60 @@ func (task ConfigTask) Help(indentCount int, detailed bool) {
 		if len(task.Params) > 0 {
 			color.Cyan("%s    Params:\n", indentString)
 			for _, param := range task.Params {
-				param.Help(indentCount+1)
+				param.Help(indentCount + 1)
 			}
 		}
 	}
 	fmt.Println("")
 }
 
-func (task ConfigTask) Run() {
-	for _, calculatedCommand := range task.CalculateCommands() {
+func (task ConfigTask) Run(configuration Configuration) {
+	allowances := task.CalculateCommandsAllowance(configuration)
+	fmt.Printf("ALLOWANCES: %v\n", allowances)
+	for position, calculatedCommand := range task.CalculateCommands() {
 		if len(calculatedCommand) > 0 {
-			fmt.Println(strings.Join(calculatedCommand, " "))
 			baseCmd := calculatedCommand[0]
 			cmdArgs := calculatedCommand[1:]
 
-			out, err := exec.Command(baseCmd, cmdArgs...).Output()
-			if err != nil {
-				fmt.Printf("%s",err)
-			}
-			if out != nil {
-				fmt.Printf("%s",out)
+			allowed := allowances[position]
+			if allowed {
+				fmt.Println(strings.Join(calculatedCommand, " "))
+				out, err := exec.Command(baseCmd, cmdArgs...).Output()
+				if err != nil {
+					fmt.Printf("%s", err)
+				}
+				if out != nil {
+					fmt.Printf("%s", out)
+				}
 			}
 		}
 	}
 }
 
-func (task ConfigTask) CalculateCommandsAllowance() {
-	for _, command := range task.Commands {
-		allowance := true
+func (task ConfigTask) CalculateCommandsAllowance(configuration Configuration) map[int]bool {
+	allowances := map[int]bool{}
+
+	for position, command := range task.Commands {
 		for _, condition := range command.Conditions {
-			allowed := true
-			if condition.Allowance {
-				allowed = condition.Variable == condition.Value
-			} else {
-				allowed = condition.Variable != condition.Value
+			allowance := true
+			parsedValue := configuration.ParsedParams[condition.Variable]
+			if condition != (ConfigCondition{}) {
+				allowed := false
+				if condition.Allowance {
+					allowed = parsedValue == condition.Value
+				} else {
+					allowed = parsedValue != condition.Value
+				}
+
+				if allowance && !allowed {
+					allowance = allowed
+				}
 			}
-			if allowance && !allowed {
-				allowance = allowed
-			}
+
+			allowances[position] = allowance
 		}
-		command.Allowed = allowance
 	}
+	return allowances
 }
 
 func (task ConfigTask) CalculateCommands() [][]string {
@@ -206,11 +219,12 @@ func (config *ConfigFile) Combine(added ConfigFile) ConfigFile {
 }
 
 type Configuration struct {
-	ConfigFile ConfigFile
-	Envs       map[string]string
-	Params     map[string]ConfigParam
-	Tasks      map[string]ConfigTask
-	Groups     map[string][]string
+	ConfigFile   ConfigFile
+	Envs         map[string]string
+	Params       map[string]ConfigParam
+	Tasks        map[string]ConfigTask
+	Groups       map[string][]string
+	ParsedParams map[string]string
 }
 
 func (configuration *Configuration) AddParam(param string, value ConfigParam) *Configuration {
@@ -219,7 +233,7 @@ func (configuration *Configuration) AddParam(param string, value ConfigParam) *C
 	return configuration
 }
 
-func BuildConfiguration(configFiles []ConfigFile) Configuration {
+func BuildConfiguration(configFiles []ConfigFile, parsedParams map[string]string) Configuration {
 	// configure default tasks
 	configFile := ConfigFile{
 		Envs: []string{},
@@ -252,11 +266,12 @@ func BuildConfiguration(configFiles []ConfigFile) Configuration {
 	}
 
 	return Configuration{
-		ConfigFile: configFile,
-		Envs:          environment.PopulateVariables(configFile.Envs),
-		Params:        make(map[string]ConfigParam),
-		Tasks:         tasks,
-		Groups:        groups,
+		ConfigFile:   configFile,
+		Envs:         environment.PopulateVariables(configFile.Envs),
+		Params:       make(map[string]ConfigParam),
+		Tasks:        tasks,
+		Groups:       groups,
+		ParsedParams: parsedParams,
 	}
 }
 
