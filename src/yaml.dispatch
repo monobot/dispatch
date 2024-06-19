@@ -1,12 +1,60 @@
 envs:
-    - HOLA2
+  -  HOLA
 tasks:
-    - name: task-yaml
-      group: TASKS
-      description: task A, description
-      commands:
-        - command: echo {{.param}}
-    - name: new-1
-      description: no real description
-      commands:
-        - command: echo '{{.param}} B'
+  - name: task-yaml
+    group: TASKS
+    description: task A, description
+    commands:
+    - command: echo {{.param}}
+    - command: touch task-a
+      conditions:
+        - variable: param
+          value: ok
+          allowance: false
+    - command: rm task-a
+      envs:
+        - HOLA
+          ADIOS
+      params:
+        - name: param
+          default: hola
+          mandatory: true
+  - name: task-yaml-condition-positive
+    group: TASKS
+    description: task will be tun if the condition is met
+    commands:
+      - command: echo 'condition-yaml-positive' run
+        envs:
+          - ADIOS
+  - name: task-yaml-condition-negative (integer)
+    group: TASKS
+    description: task will be tun if the condition is not met
+    commands:
+      - command: echo 'condition-negative (integer)' run
+        conditions:
+          - variable: nazi
+            value: pedro
+            allowance: true
+        envs:
+          - HOLA
+            ADIOS
+  - name: task-yaml-condition-positive (bool)
+    group: TASKS
+    description: task will be tun if the condition is not met
+    commands:
+      - command: echo 'condition-positive (bool)' run
+        envs:
+          - HOLA
+            ADIOS
+  - name: task-yaml-run-hidden
+    group: TASKS
+    commands:
+      - command: echo 'task-run-hidden' run
+      - command: ${task-condition-positive}
+      - command: ${task-condition-negative}
+  - name: task-yaml-pre
+    group: PRE TASKS
+    description: task PRE, description
+    commands:
+      - command: echo 'task-pre' command-1
+      - command: echo 'task-pre' command-2
