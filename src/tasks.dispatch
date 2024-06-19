@@ -12,6 +12,9 @@
                     "command": "echo {{.param}}"
                 },
                 {
+                    "command": "echo {{.HOLA}}"
+                },
+                {
                     "command": "touch task-a",
                     "conditions": [
                         {
@@ -32,7 +35,7 @@
             "params": [
                 {
                     "name": "param",
-                    "default": "hola",
+                    "default": "param",
                     "mandatory": true
                 }
             ]

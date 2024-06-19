@@ -11,7 +11,6 @@ import (
 )
 
 func parseCommandLineArgs() ([]string, map[string]string) {
-
 	tasksRequested := []string{}
 	parsedParams := map[string]string{}
 	for _, param := range os.Args[1:] {
@@ -71,6 +70,8 @@ func main() {
 			configuredParamValues[param.Name] = value
 		}
 	}
+
+	configuration.UpdateContextData(configuredParamValues)
 
 	// RUN TASKS
 	for _, taskName := range tasksRequested {
