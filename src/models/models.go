@@ -3,11 +3,11 @@ package models
 import (
 	"fmt"
 
+	"bytes"
 	"os/exec"
 	"reflect"
-	"text/template"
 	"strings"
-	"bytes"
+	"text/template"
 
 	"github.com/monobot/dispatch/src/environment"
 
@@ -34,7 +34,7 @@ func (condition Condition) Help(indentCount int) {
 }
 
 type Command struct {
-	Command    string            `json:"command" yaml:"command"`
+	Command    string      `json:"command" yaml:"command"`
 	Conditions []Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
 	Allowed    bool
 }
@@ -81,7 +81,6 @@ func (command Command) Run(configuration *Configuration) {
 	}
 	runCommand := outputBytes.String()
 
-
 	if allowance {
 		if configuration.HasFlag("verbose") {
 			fmt.Printf("running: \"%s\"\n", runCommand)
@@ -109,9 +108,9 @@ func (command Command) Run(configuration *Configuration) {
 }
 
 type Parameter struct {
-	Name        string `json:"name" yaml:"name"`
-	Default     string `json:"default" yaml:"default"`
-	Mandatory   bool   `json:"mandatory" yaml:"mandatory"`
+	Name      string `json:"name" yaml:"name"`
+	Default   string `json:"default" yaml:"default"`
+	Mandatory bool   `json:"mandatory" yaml:"mandatory"`
 }
 
 func (param Parameter) Help(indentCount int) {
@@ -127,12 +126,12 @@ func (param Parameter) Help(indentCount int) {
 }
 
 type Task struct {
-	Name        string       `json:"name" yaml:"name"`
-	Group       string       `json:"group" yaml:"group"`
-	Description string       `json:"description,omitempty" yaml:"description,omitempty"`
-	Commands    []Command    `json:"commands" yaml:"commands"`
-	Envs        []string     `json:"envs,omitempty" yaml:"envs,omitempty"`
-	Params      []Parameter  `json:"params,omitempty" yaml:"params,omitempty"`
+	Name        string      `json:"name" yaml:"name"`
+	Group       string      `json:"group" yaml:"group"`
+	Description string      `json:"description,omitempty" yaml:"description,omitempty"`
+	Commands    []Command   `json:"commands" yaml:"commands"`
+	Envs        []string    `json:"envs,omitempty" yaml:"envs,omitempty"`
+	Params      []Parameter `json:"params,omitempty" yaml:"params,omitempty"`
 }
 
 func (task Task) Help(indentCount int, detailed bool) {
@@ -191,10 +190,9 @@ func (task Task) Run(configuration *Configuration) {
 	}
 }
 
-
 type ConfigFile struct {
-	Envs  []string  `json:"envs" yaml:"envs"`
-	Tasks []Task    `json:"tasks" yaml:"tasks"`
+	Envs  []string `json:"envs" yaml:"envs"`
+	Tasks []Task   `json:"tasks" yaml:"tasks"`
 }
 
 func (config *ConfigFile) TaskNames() []string {
@@ -298,10 +296,11 @@ func getIndentString(nestCount int) string {
 	return indent
 }
 
-func PrintHelpGroupTasks(groupTasks []string, configuration *Configuration, indentCount int, detailed bool) {
+func PrintHelpGroupTasks(groupTasks []string, configuration *Configuration, indentCount int) {
 	for _, taskName := range groupTasks {
 		task := configuration.Tasks[taskName]
-		task.Help(indentCount, detailed)
+
+		task.Help(indentCount, configuration.HasFlag("verbose"))
 	}
 }
 
@@ -330,6 +329,6 @@ func Help(configuration *Configuration) {
 		if len(configuration.Groups) > 1 {
 			color.Yellow("%s:\n", groupName)
 		}
-		PrintHelpGroupTasks(groupTasks, configuration, indentCount, false)
+		PrintHelpGroupTasks(groupTasks, configuration, indentCount)
 	}
 }
