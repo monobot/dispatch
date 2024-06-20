@@ -26,7 +26,7 @@ func (condition Condition) HelpString() string {
 	if condition.Allowance {
 		allowance = "Allow"
 	}
-	return color.RedString(condition.Variable)+" equals "+color.RedString(condition.Value)+" then "+color.RedString(allowance)
+	return "\"" + color.RedString(condition.Variable) + "\" equals \"" + color.RedString(condition.Value) + "\" then " + color.RedString(allowance)
 }
 
 func (condition Condition) Help(indentCount int) {
@@ -47,9 +47,9 @@ func (command Command) Help(indentCount int) {
 
 	fmt.Printf("%s    - \"%s\"\n", indentString, command.Command)
 	if len(command.Conditions) > 0 {
-		fmt.Printf("%s    Conditions:\n", indentString)
+		fmt.Printf("%s        Conditions:\n", indentString)
 		for _, condition := range command.Conditions {
-			condition.Help(indentCount + 1)
+			condition.Help(indentCount + 2)
 		}
 	}
 }
@@ -58,13 +58,13 @@ func (command Command) Run(configuration *Configuration) {
 	allowance := true
 	failConditionString := ""
 	for _, condition := range command.Conditions {
-		parsedValue := configuration.ContextData[condition.Variable]
+		contextValue := configuration.ContextData.Data[condition.Variable]
 		if condition != (Condition{}) {
 			allowed := false
 			if condition.Allowance {
-				allowed = parsedValue == condition.Value
+				allowed = contextValue == condition.Value
 			} else {
-				allowed = parsedValue != condition.Value
+				allowed = contextValue != condition.Value
 			}
 
 			if allowance && !allowed {
@@ -80,7 +80,7 @@ func (command Command) Run(configuration *Configuration) {
 		fmt.Println(err)
 	}
 	var outputBytes bytes.Buffer
-	if err := template.Execute(&outputBytes, configuration.ContextData); err != nil {
+	if err := template.Execute(&outputBytes, configuration.ContextData.Data); err != nil {
 		// this should not pass silently
 		fmt.Println(err)
 	}
@@ -91,11 +91,11 @@ func (command Command) Run(configuration *Configuration) {
 			fmt.Printf(color.YellowString("running ")+"\"%s\":\n", runCommand)
 		}
 
-		splittedCommand := strings.Fields(runCommand)
+		splitCommand := strings.Fields(runCommand)
 
-		if len(splittedCommand) > 0 {
-			baseCmd := splittedCommand[0]
-			cmdArgs := splittedCommand[1:]
+		if len(splitCommand) > 0 {
+			baseCmd := splitCommand[0]
+			cmdArgs := splitCommand[1:]
 
 			output, _ := exec.Command(baseCmd, cmdArgs...).CombinedOutput()
 			stringOutput := string(output)
@@ -105,8 +105,8 @@ func (command Command) Run(configuration *Configuration) {
 		}
 	} else {
 		if configuration.HasFlag("verbose") {
-			fmt.Printf(color.YellowString("Command") + " \"%s\" " + color.YellowString("not run.\n"), runCommand)
-			fmt.Println("    condition: " +failConditionString+" not met\n")
+			fmt.Printf(color.YellowString("Command")+" \"%s\" "+color.YellowString("not run.\n"), runCommand)
+			fmt.Println("    condition: " + failConditionString + " not met\n")
 		}
 	}
 }
@@ -136,6 +136,7 @@ type Task struct {
 	Commands    []Command   `json:"commands" yaml:"commands"`
 	Envs        []string    `json:"envs,omitempty" yaml:"envs,omitempty"`
 	Params      []Parameter `json:"params,omitempty" yaml:"params,omitempty"`
+	EnvsValues  map[string]string
 }
 
 func (task Task) Help(indentCount int, detailed bool) {
@@ -178,7 +179,7 @@ func (task Task) Run(configuration *Configuration) {
 		}
 
 		if allowance && !allowed {
-			parameterString = "parameter \""+color.YellowString(param.Name)+"\" is mandatory"
+			parameterString = "parameter \"" + color.YellowString(param.Name) + "\" is mandatory"
 			allowance = allowed
 		}
 	}
@@ -186,7 +187,6 @@ func (task Task) Run(configuration *Configuration) {
 	if allowance {
 		for _, command := range task.Commands {
 			// check params condition met
-
 			command.Run(configuration)
 		}
 	} else {
@@ -232,30 +232,46 @@ func (configFile *ConfigFile) Combine(newConfigFile ConfigFile) ConfigFile {
 	}
 }
 
-type Configuration struct {
-	ConfigFile   ConfigFile
-	Params       map[string]Parameter
-	Tasks        map[string]Task
-	Groups       map[string][]string
-	ContextData  map[string]string
+type ContextData struct {
+	Flags []string
+	Data  map[string]string
 }
 
-func (configuration *Configuration) HasFlag(flag string) bool {
-	_, ok := configuration.ContextData[flag]
-
-	return ok
-}
-
-func (configuration *Configuration) UpdateContextData(contextData map[string]string) {
-	for param, value := range contextData {
-		currentValue, hasKey := configuration.ContextData[param]
-		if !hasKey || currentValue == "" {
-			configuration.ContextData[param] = value
-		}
+func (contextData *ContextData) AddFlag(flag string) {
+	alreadyContains := slices.Contains(contextData.Flags, flag)
+	if !alreadyContains {
+		contextData.Flags = append(contextData.Flags, flag)
 	}
 }
 
-func BuildConfiguration(configFiles []ConfigFile, contextData map[string]string) *Configuration {
+func (contextData *ContextData) HasFlag(flag string) bool {
+	return slices.Contains(contextData.Flags, flag)
+}
+
+func (contextData *ContextData) UpdateDatum(key string, value string) {
+	currentGroupTasks, ok := contextData.Data[key]
+	if !ok || currentGroupTasks == "" {
+		contextData.Data[key] = value
+	}
+}
+func (contextData *ContextData) UpdateData(data map[string]string) {
+	for key, value := range data {
+		contextData.UpdateDatum(key, value)
+	}
+}
+
+type Configuration struct {
+	Params      map[string]Parameter
+	Tasks       map[string]Task
+	TaskGroups  map[string][]string
+	ContextData ContextData
+}
+
+func (configuration *Configuration) HasFlag(flag string) bool {
+	return configuration.ContextData.HasFlag(flag)
+}
+
+func BuildConfiguration(configFiles []ConfigFile, contextData ContextData) *Configuration {
 	// configure default tasks
 	configFile := ConfigFile{
 		Envs: []string{},
@@ -273,6 +289,7 @@ func BuildConfiguration(configFiles []ConfigFile, contextData map[string]string)
 
 	groups := make(map[string][]string)
 	tasks := make(map[string]Task)
+	envsValues := map[string]string{}
 	for _, task := range configFile.Tasks {
 		tasks[task.Name] = task
 		taskGroup := task.Group
@@ -285,16 +302,23 @@ func BuildConfiguration(configFiles []ConfigFile, contextData map[string]string)
 		}
 
 		groups[taskGroup] = append(currentGroupTasks, task.Name)
+
+		for _, param := range task.Params {
+			value, hasKey := envsValues[param.Name]
+			if !hasKey {
+				envsValues[param.Name] = value
+			}
+		}
 	}
 
 	configuration := Configuration{
-		ConfigFile:   configFile,
-		Tasks:        tasks,
-		Groups:       groups,
+		Tasks:      tasks,
+		TaskGroups: groups,
 	}
-	configuration.ContextData = contextData
-	configuration.UpdateContextData(environment.PopulateVariables(configFile.Envs))
+	contextData.UpdateData(environment.PopulateVariables(configFile.Envs))
+	contextData.UpdateData(envsValues)
 
+	configuration.ContextData = contextData
 	return &configuration
 }
 
@@ -319,24 +343,25 @@ func Help(configuration *Configuration) {
 	fmt.Println("")
 	title := color.New(color.FgRed).Add(color.Bold)
 	title.Println("THIS IS 'dispatch' HELP.")
-	fmt.Println(("You can find more information on how to build and configure your own dispatch tasks, here:"))
-	fmt.Println(("    TODO"))
-	fmt.Println((""))
+	fmt.Println("You can find more information on how to build and configure your own dispatch tasks, here:")
+	fmt.Println("    TODO")
+	fmt.Println("")
 
-	// enviornments
-	color.Yellow("Environments:\n")
-	environments := strings.Join(configuration.ConfigFile.Envs, ", ")
-	fmt.Printf("    %s\n\n", environments)
+	// environments
+	// TODO Rebuild environments
+	// color.Yellow("Environments:\n")
+	// environments := strings.Join(configuration.ConfigFile.Envs, ", ")
+	// fmt.Printf("    %s\n\n", environments)
 
 	// tasks
 	indentCount := 0
-	if len(configuration.Groups) > 1 {
+	if len(configuration.TaskGroups) > 1 {
 		indentCount += 1
 	}
-	groupNames := reflect.ValueOf(configuration.Groups).MapKeys()
+	groupNames := reflect.ValueOf(configuration.TaskGroups).MapKeys()
 	for _, groupName := range groupNames {
-		groupTasks := configuration.Groups[groupName.String()]
-		if len(configuration.Groups) > 1 {
+		groupTasks := configuration.TaskGroups[groupName.String()]
+		if len(configuration.TaskGroups) > 1 {
 			color.Yellow("%s:\n", groupName)
 		}
 		PrintHelpGroupTasks(groupTasks, configuration, indentCount)

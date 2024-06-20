@@ -10,9 +10,10 @@ import (
 	"github.com/monobot/dispatch/src/models"
 )
 
-func parseCommandLineArgs() ([]string, map[string]string) {
+func parseCommandLineArgs() ([]string, models.ContextData) {
 	tasksRequested := []string{}
 	parsedParams := map[string]string{}
+	flags := []string{}
 	for _, param := range os.Args[1:] {
 		if !strings.HasPrefix(param, "-") {
 			tasksRequested = append(tasksRequested, param)
@@ -24,11 +25,11 @@ func parseCommandLineArgs() ([]string, map[string]string) {
 
 			paramName := taskNameSplit[0]
 			if paramName == "h" {
-				paramName = "help"
+				flags = append(flags, "help")
 			}
 
 			if paramName == "v" {
-				paramName = "verbose"
+				flags = append(flags, "verbose")
 			}
 
 			if len(taskNameSplit) == 1 {
@@ -45,36 +46,21 @@ func parseCommandLineArgs() ([]string, map[string]string) {
 	if len(tasksRequested) == 0 {
 		tasksRequested = []string{"help"}
 	}
-	return tasksRequested, parsedParams
+	contextData := models.ContextData{Data: parsedParams, Flags: flags}
+	return tasksRequested, contextData
 }
 
 func main() {
-	tasksRequested, parsedParams := parseCommandLineArgs()
-	configuration := models.BuildConfiguration(discovery.TaskDiscovery(), parsedParams)
+	tasksRequested, contextData := parseCommandLineArgs()
+	configuration := models.BuildConfiguration(discovery.TaskDiscovery(), contextData)
 
-	// COLLECT VALUES FOR ALL THE PARAMS
-	configuredParamValues := map[string]string{}
-
+	// RUN TASKS
 	for _, taskName := range tasksRequested {
-		taskToRun, ok := configuration.Tasks[taskName]
+		_, ok := configuration.Tasks[taskName]
 		if !ok {
 			fmt.Printf("Unkwown task %s!\n", taskName)
 			return
 		}
-
-		for _, param := range taskToRun.Params {
-			value, ok := parsedParams[param.Name]
-			if !ok {
-				value = param.Default
-			}
-			configuredParamValues[param.Name] = value
-		}
-	}
-
-	configuration.UpdateContextData(configuredParamValues)
-
-	// RUN TASKS
-	for _, taskName := range tasksRequested {
 		taskToRun := configuration.Tasks[taskName]
 
 		if taskName == "help" {
