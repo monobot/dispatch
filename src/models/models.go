@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"os"
 
 	"bytes"
 	"os/exec"
@@ -87,9 +88,7 @@ func (command Command) Run(configuration *Configuration) {
 
 	runCommand := outputBytes.String()
 	if allowance {
-		if configuration.HasFlag("verbose") {
-			fmt.Printf(color.YellowString("running ")+"\"%s\":\n", runCommand)
-		}
+		fmt.Printf(color.YellowString("running ")+"\"%s\":\n", runCommand)
 
 		splitCommand := strings.Fields(runCommand)
 
@@ -97,10 +96,13 @@ func (command Command) Run(configuration *Configuration) {
 			baseCmd := splitCommand[0]
 			cmdArgs := splitCommand[1:]
 
-			output, _ := exec.Command(baseCmd, cmdArgs...).CombinedOutput()
-			stringOutput := string(output)
-			if stringOutput != "" {
-				fmt.Println(stringOutput)
+			command := exec.Command(baseCmd, cmdArgs...)
+
+			command.Stdout = os.Stdout
+			command.Stderr = os.Stderr
+
+			if err := command.Run(); err != nil {
+				fmt.Println("could not run command: ", err)
 			}
 		}
 	} else {
