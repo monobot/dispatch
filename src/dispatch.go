@@ -43,13 +43,11 @@ func parseCommandLineArgs() ([]string, models.ContextData, error) {
 					return nil, contextData, errors.New("Invalid param -" + param)
 				}
 
-				if len(taskNameSplit) == 1 {
-					parsedParams[paramName] = ""
-				} else {
+				if len(taskNameSplit) > 1 {
 					if len(taskNameSplit) > 2 {
 						return nil, contextData, errors.New(strings.Join(taskNameSplit, "="))
 					}
-					parsedParams[paramName] = taskNameSplit[1]
+					parsedParams[taskNameSplit[0]] = taskNameSplit[1]
 				}
 			}
 		}
@@ -70,6 +68,7 @@ func main() {
 		fmt.Printf(color.RedString("Error!")+" parsing command line arguments \"%s\"", err)
 		return
 	}
+	fmt.Printf("contextData: %v\n", contextData)
 	configuration := models.BuildConfiguration(discovery.TaskDiscovery(), contextData)
 
 	// RUN TASKS

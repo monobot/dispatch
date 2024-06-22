@@ -90,24 +90,31 @@ func (command Command) Run(configuration *Configuration) error {
 	runCommand := outputBytes.String()
 
 	if allowance {
-		fmt.Printf(color.YellowString("running ")+"\"%s\"\n", runCommand)
+		isDryRun := configuration.HasFlag("dry-run")
+		prefix := color.YellowString("running ")
+		if isDryRun {
+			prefix = color.RedString("DRY-RUN ")
+		}
+		fmt.Printf(prefix + "\"" + runCommand + "\"\n")
 
-		splitCommand := strings.Fields(runCommand)
+		if !isDryRun {
+			splitCommand := strings.Fields(runCommand)
 
-		if len(splitCommand) > 0 {
-			baseCmd := splitCommand[0]
-			cmdArgs := splitCommand[1:]
+			if len(splitCommand) > 0 {
+				baseCmd := splitCommand[0]
+				cmdArgs := splitCommand[1:]
 
-			command := exec.Command(baseCmd, cmdArgs...)
+				command := exec.Command(baseCmd, cmdArgs...)
 
-			command.Stdout = os.Stdout
-			command.Stderr = os.Stderr
+				command.Stdout = os.Stdout
+				command.Stderr = os.Stderr
 
-			err := command.Run()
+				err := command.Run()
 
-			if err != nil {
-				fmt.Println("could not run command: ", err)
-				return err
+				if err != nil {
+					fmt.Println("could not run command: ", err)
+					return err
+				}
 			}
 		}
 	} else {
@@ -353,6 +360,7 @@ func BuildConfiguration(configFiles []ConfigFile, contextData ContextData) *Conf
 	contextData.UpdateData(environment.PopulateVariables(configFile.Envs))
 	contextData.UpdateData(envsValues)
 
+	fmt.Println(contextData.Data)
 	configuration.ContextData = contextData
 	return &configuration
 }
