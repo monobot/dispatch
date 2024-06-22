@@ -126,16 +126,26 @@ type Parameter struct {
 	Mandatory bool   `json:"mandatory" yaml:"mandatory"`
 }
 
+func (param Parameter) HelpString() string {
+	mandatoryString := "is not"
+	if param.Mandatory {
+		mandatoryString = "is"
+	}
+	return mandatoryString + color.YellowString(" mandatory")
+}
+
 func (param Parameter) Help(indentCount int) {
 	indentString := getIndentString(indentCount)
 
-	fmt.Printf("%s    %s\n", indentString, param.Name)
+	defaultString := ""
 	if param.Default != "" {
-		fmt.Printf("%s        default: %s\n", indentString, param.Default)
+		defaultString = " default: " + color.YellowString(param.Default)
 	}
+	mandatoryString := ""
 	if param.Mandatory {
-		fmt.Printf("%s        mandatory: %v\n", indentString, param.Mandatory)
+		mandatoryString = " " + param.HelpString()
 	}
+	fmt.Printf("%s    "+color.YellowString(param.Name)+"%s%s\n", indentString, mandatoryString, defaultString)
 }
 
 type Task struct {
@@ -178,6 +188,7 @@ func (task Task) Help(indentCount int, detailed bool) {
 }
 
 func (task Task) Run(configuration *Configuration) {
+	logFields := log.Fields{"task": task.Name}
 	allowance := true
 	parameterString := ""
 	for _, param := range task.Params {
@@ -191,14 +202,17 @@ func (task Task) Run(configuration *Configuration) {
 			parameterString = "parameter \"" + color.YellowString(param.Name) + "\" is mandatory"
 			allowance = allowed
 		}
+		log.WithFields(logFields).Debugf("\"%v\" validated to: %v", param.HelpString(), allowed)
 	}
 
 	if allowance {
+		log.WithFields(logFields).Debug("task running")
 		for _, command := range task.Commands {
 			// check params condition met
 			command.Run(configuration)
 		}
 	} else {
+		log.WithFields(logFields).Debug("task not running")
 		if configuration.HasFlag("verbose") {
 			fmt.Printf("task \"%s\" not run, "+parameterString+"\n", task.Name)
 		}

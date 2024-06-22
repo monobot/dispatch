@@ -10,7 +10,7 @@ func ConfigureLogger() {
 		DisableTimestamp: true,
 	})
 
-	loggingLevel := logrus.PanicLevel
+	loggingLevel := logrus.ErrorLevel
 	if enableInternalLogger == "true" {
 		loggingLevel = logrus.DebugLevel
 	}

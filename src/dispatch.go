@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"regexp"
 	"strings"
@@ -12,10 +12,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func parseCommandLineArgs() ([]string, models.ContextData) {
+func parseCommandLineArgs() ([]string, models.ContextData, error) {
+	contextData := models.ContextData{}
 	tasksRequested := []string{}
 	parsedParams := map[string]string{}
 	flags := []string{}
+	err := error(nil)
 	for _, param := range os.Args[1:] {
 		if !strings.HasPrefix(param, "-") {
 			tasksRequested = append(tasksRequested, param)
@@ -25,22 +27,30 @@ func parseCommandLineArgs() ([]string, models.ContextData) {
 			equal := regexp.MustCompile(`=`)
 			taskNameSplit := equal.Split(param, -1)
 
-			paramName := taskNameSplit[0]
-			if paramName == "h" {
-				flags = append(flags, "help")
+			paramMap := map[string]string{
+				"-h":       "help",
+				"-v":       "verbose",
+				"-dry-run": "dry-run",
+				"-dryrun":  "dry-run",
+				"-dry":     "dry-run",
 			}
 
-			if paramName == "v" {
-				flags = append(flags, "verbose")
-			}
-
-			if len(taskNameSplit) == 1 {
-				parsedParams[paramName] = ""
+			paramName, ok := paramMap[taskNameSplit[0]]
+			if ok {
+				flags = append(flags, paramName)
 			} else {
-				if len(taskNameSplit) > 2 {
-					panic("Invalid param")
+				if string(param[0]) == "-" {
+					return nil, contextData, errors.New("Invalid param -" + param)
 				}
-				parsedParams[paramName] = taskNameSplit[1]
+
+				if len(taskNameSplit) == 1 {
+					parsedParams[paramName] = ""
+				} else {
+					if len(taskNameSplit) > 2 {
+						return nil, contextData, errors.New(strings.Join(taskNameSplit, "="))
+					}
+					parsedParams[paramName] = taskNameSplit[1]
+				}
 			}
 		}
 	}
@@ -48,21 +58,27 @@ func parseCommandLineArgs() ([]string, models.ContextData) {
 	if len(tasksRequested) == 0 {
 		tasksRequested = []string{"help"}
 	}
-	contextData := models.ContextData{Data: parsedParams, Flags: flags}
-	return tasksRequested, contextData
+
+	contextData.Data = parsedParams
+	contextData.Flags = flags
+	return tasksRequested, contextData, err
 }
 
 func main() {
 	environment.ConfigureLogger()
 	log.Info("Starting dispatch")
-	tasksRequested, contextData := parseCommandLineArgs()
+	tasksRequested, contextData, err := parseCommandLineArgs()
+	if err != nil {
+		log.Errorf("Error parsing command line arguments \"%s\"", err)
+		return
+	}
 	configuration := models.BuildConfiguration(discovery.TaskDiscovery(), contextData)
 
 	// RUN TASKS
 	for _, taskName := range tasksRequested {
 		_, ok := configuration.Tasks[taskName]
 		if !ok {
-			fmt.Printf("unknown task %s!\n", taskName)
+			log.Errorf("unknown task %s!\n", taskName)
 			return
 		}
 		taskToRun := configuration.Tasks[taskName]
