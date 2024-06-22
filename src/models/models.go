@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"os"
+	"errors"
 
 	"bytes"
 	"os/exec"
@@ -57,7 +58,7 @@ func (command Command) Help(indentCount int) {
 	}
 }
 
-func (command Command) Run(configuration *Configuration) {
+func (command Command) Run(configuration *Configuration) error {
 	logFields := log.Fields{"command": command.Command}
 
 	allowance := true
@@ -82,33 +83,33 @@ func (command Command) Run(configuration *Configuration) {
 
 	template, err := template.New("commandTemplate").Parse(command.Command)
 	if err != nil {
-		// this should not pass silently
-		fmt.Println(err)
+		return errors.New("can not execute command \""+command.Command+"\" can not be parsed.")
 	}
 	var outputBytes bytes.Buffer
-	if err := template.Execute(&outputBytes, configuration.ContextData.Data); err != nil {
-		// this should not pass silently
-		fmt.Println(err)
+	if err := template.Option("missingkey=error").Execute(&outputBytes, configuration.ContextData.Data); err != nil {
+		return errors.New("can not execute command \""+command.Command+"\", all parameters could not be infered")
 	}
 
 	runCommand := outputBytes.String()
+	dryRun := configuration.HasFlag("dry-run")
 	if allowance {
 		log.WithFields(logFields).Debug("command is running")
-		fmt.Printf(color.YellowString("running ")+"\"%s\":\n", runCommand)
+		fmt.Printf(color.YellowString("running ")+"\"%s\"\n", runCommand)
+		if !dryRun {
+			splitCommand := strings.Fields(runCommand)
 
-		splitCommand := strings.Fields(runCommand)
+			if len(splitCommand) > 0 {
+				baseCmd := splitCommand[0]
+				cmdArgs := splitCommand[1:]
 
-		if len(splitCommand) > 0 {
-			baseCmd := splitCommand[0]
-			cmdArgs := splitCommand[1:]
+				command := exec.Command(baseCmd, cmdArgs...)
 
-			command := exec.Command(baseCmd, cmdArgs...)
+				command.Stdout = os.Stdout
+				command.Stderr = os.Stderr
 
-			command.Stdout = os.Stdout
-			command.Stderr = os.Stderr
-
-			if err := command.Run(); err != nil {
-				fmt.Println("could not run command: ", err)
+				if err := command.Run(); err != nil {
+					fmt.Println("could not run command: ", err)
+				}
 			}
 		}
 	} else {
@@ -118,6 +119,8 @@ func (command Command) Run(configuration *Configuration) {
 			fmt.Println("    condition: " + failConditionString + " not met\n")
 		}
 	}
+
+	return nil
 }
 
 type Parameter struct {
@@ -184,6 +187,7 @@ func (task Task) Help(indentCount int, detailed bool) {
 			}
 		}
 	}
+
 	fmt.Println("")
 }
 
@@ -208,8 +212,10 @@ func (task Task) Run(configuration *Configuration) {
 	if allowance {
 		log.WithFields(logFields).Debug("task running")
 		for _, command := range task.Commands {
-			// check params condition met
-			command.Run(configuration)
+			err := command.Run(configuration)
+			if err != nil {
+				log.Errorf("%v\n", err)
+			}
 		}
 	} else {
 		log.WithFields(logFields).Debug("task not running")

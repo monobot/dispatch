@@ -29,8 +29,11 @@ func parseCommandLineArgs() ([]string, models.ContextData, error) {
 
 			paramMap := map[string]string{
 				"-h":       "help",
+				"-help":    "help",
 				"-v":       "verbose",
+				"-verbose": "verbose",
 				"-dry-run": "dry-run",
+				"-dr":      "dry-run",
 				"-dryrun":  "dry-run",
 				"-dry":     "dry-run",
 			}
