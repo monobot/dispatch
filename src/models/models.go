@@ -57,7 +57,7 @@ func (command Command) Help(indentCount int) {
 	}
 }
 
-func (command Command) Run(configuration *Configuration) {
+func (command Command) Run(configuration *Configuration) error {
 	logFields := log.Fields{"command": command.Command}
 
 	allowance := true
@@ -107,8 +107,11 @@ func (command Command) Run(configuration *Configuration) {
 			command.Stdout = os.Stdout
 			command.Stderr = os.Stderr
 
-			if err := command.Run(); err != nil {
+			err := command.Run()
+
+			if err != nil {
 				fmt.Println("could not run command: ", err)
+				return err
 			}
 		}
 	} else {
@@ -118,6 +121,8 @@ func (command Command) Run(configuration *Configuration) {
 			fmt.Println("    condition: " + failConditionString + " not met\n")
 		}
 	}
+
+	return nil
 }
 
 type Parameter struct {
@@ -207,14 +212,27 @@ func (task Task) Run(configuration *Configuration) {
 
 	if allowance {
 		log.WithFields(logFields).Debug("task running")
+		successfullyRun := true
 		for _, command := range task.Commands {
 			// check params condition met
-			command.Run(configuration)
+			err := command.Run(configuration)
+			if err != nil && successfullyRun {
+				successfullyRun = false
+			}
 		}
+
+		if configuration.HasFlag("verbose") {
+			if !successfullyRun {
+				fmt.Println("task \"" + task.Name + "\" failed")
+			} else {
+				fmt.Println("task \"" + task.Name + "\" completed")
+			}
+		}
+
 	} else {
 		log.WithFields(logFields).Debug("task not running")
 		if configuration.HasFlag("verbose") {
-			fmt.Printf("task \"%s\" not run, "+parameterString+"\n", task.Name)
+			fmt.Println("task \"" + task.Name + "\"  not run, " + parameterString + "\n")
 		}
 	}
 }
