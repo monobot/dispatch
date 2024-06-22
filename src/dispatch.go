@@ -2,14 +2,14 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/monobot/dispatch/src/discovery"
-	"github.com/monobot/dispatch/src/environment"
 	"github.com/monobot/dispatch/src/models"
-	log "github.com/sirupsen/logrus"
 )
 
 func parseCommandLineArgs() ([]string, models.ContextData, error) {
@@ -65,11 +65,9 @@ func parseCommandLineArgs() ([]string, models.ContextData, error) {
 }
 
 func main() {
-	environment.ConfigureLogger()
-	log.Info("Starting dispatch")
 	tasksRequested, contextData, err := parseCommandLineArgs()
 	if err != nil {
-		log.Errorf("Error parsing command line arguments \"%s\"", err)
+		fmt.Printf(color.RedString("Error!")+" parsing command line arguments \"%s\"", err)
 		return
 	}
 	configuration := models.BuildConfiguration(discovery.TaskDiscovery(), contextData)
@@ -78,7 +76,7 @@ func main() {
 	for _, taskName := range tasksRequested {
 		_, ok := configuration.Tasks[taskName]
 		if !ok {
-			log.Errorf("unknown task %s!\n", taskName)
+			fmt.Printf("unknown task %s!\n", taskName)
 			return
 		}
 		taskToRun := configuration.Tasks[taskName]

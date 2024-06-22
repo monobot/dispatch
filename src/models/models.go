@@ -13,7 +13,6 @@ import (
 	"github.com/monobot/dispatch/src/environment"
 
 	"github.com/fatih/color"
-	log "github.com/sirupsen/logrus"
 
 	"golang.org/x/exp/slices"
 )
@@ -58,8 +57,6 @@ func (command Command) Help(indentCount int) {
 }
 
 func (command Command) Run(configuration *Configuration) error {
-	logFields := log.Fields{"command": command.Command}
-
 	allowance := true
 	failConditionString := ""
 	for _, condition := range command.Conditions {
@@ -76,7 +73,6 @@ func (command Command) Run(configuration *Configuration) error {
 				allowance = allowed
 				failConditionString = condition.HelpString()
 			}
-			log.WithFields(logFields).Debugf("condition \"%v\" validated to: %v", condition.HelpString(), allowed)
 		}
 	}
 
@@ -92,9 +88,9 @@ func (command Command) Run(configuration *Configuration) error {
 	}
 
 	runCommand := outputBytes.String()
+
 	if allowance {
-		log.WithFields(logFields).Debug("command is running")
-		fmt.Printf(color.YellowString("running ")+"\"%s\":\n", runCommand)
+		fmt.Printf(color.YellowString("running ")+"\"%s\"\n", runCommand)
 
 		splitCommand := strings.Fields(runCommand)
 
@@ -115,7 +111,6 @@ func (command Command) Run(configuration *Configuration) error {
 			}
 		}
 	} else {
-		log.WithFields(logFields).Debug("command not running")
 		if configuration.HasFlag("verbose") {
 			fmt.Printf(color.YellowString("Command")+" \"%s\" "+color.YellowString("not run.\n"), runCommand)
 			fmt.Println("    condition: " + failConditionString + " not met\n")
@@ -193,7 +188,6 @@ func (task Task) Help(indentCount int, detailed bool) {
 }
 
 func (task Task) Run(configuration *Configuration) {
-	logFields := log.Fields{"task": task.Name}
 	allowance := true
 	parameterString := ""
 	for _, param := range task.Params {
@@ -207,11 +201,12 @@ func (task Task) Run(configuration *Configuration) {
 			parameterString = "parameter \"" + color.YellowString(param.Name) + "\" is mandatory"
 			allowance = allowed
 		}
-		log.WithFields(logFields).Debugf("\"%v\" validated to: %v", param.HelpString(), allowed)
+		if configuration.HasFlag("verbose") {
+			fmt.Printf("\"%v\" validated to: %v", param.HelpString(), allowed)
+		}
 	}
 
 	if allowance {
-		log.WithFields(logFields).Debug("task running")
 		successfullyRun := true
 		for _, command := range task.Commands {
 			// check params condition met
@@ -221,16 +216,15 @@ func (task Task) Run(configuration *Configuration) {
 			}
 		}
 
-		if configuration.HasFlag("verbose") {
-			if !successfullyRun {
-				fmt.Println("task \"" + task.Name + "\" failed")
-			} else {
+		if !successfullyRun {
+			fmt.Println("task \"" + task.Name + "\" failed")
+		} else {
+			if configuration.HasFlag("verbose") {
 				fmt.Println("task \"" + task.Name + "\" completed")
 			}
 		}
 
 	} else {
-		log.WithFields(logFields).Debug("task not running")
 		if configuration.HasFlag("verbose") {
 			fmt.Println("task \"" + task.Name + "\"  not run, " + parameterString + "\n")
 		}
