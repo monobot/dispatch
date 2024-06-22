@@ -13,6 +13,8 @@ import (
 	"github.com/monobot/dispatch/src/environment"
 
 	"github.com/fatih/color"
+	log "github.com/sirupsen/logrus"
+
 	"golang.org/x/exp/slices"
 )
 
@@ -27,7 +29,7 @@ func (condition Condition) HelpString() string {
 	if condition.Allowance {
 		allowance = "Allow"
 	}
-	return "\"" + color.RedString(condition.Variable) + "\" equals \"" + color.RedString(condition.Value) + "\" then " + color.RedString(allowance)
+	return "variable \"" + color.RedString(condition.Variable) + "\" equals \"" + color.RedString(condition.Value) + "\" then " + color.RedString(allowance)
 }
 
 func (condition Condition) Help(indentCount int) {
@@ -56,6 +58,8 @@ func (command Command) Help(indentCount int) {
 }
 
 func (command Command) Run(configuration *Configuration) {
+	logFields := log.Fields{"command": command.Command}
+
 	allowance := true
 	failConditionString := ""
 	for _, condition := range command.Conditions {
@@ -72,6 +76,7 @@ func (command Command) Run(configuration *Configuration) {
 				allowance = allowed
 				failConditionString = condition.HelpString()
 			}
+			log.WithFields(logFields).Debugf("condition \"%v\" validated to: %v", condition.HelpString(), allowed)
 		}
 	}
 
@@ -88,6 +93,7 @@ func (command Command) Run(configuration *Configuration) {
 
 	runCommand := outputBytes.String()
 	if allowance {
+		log.WithFields(logFields).Debug("command is running")
 		fmt.Printf(color.YellowString("running ")+"\"%s\":\n", runCommand)
 
 		splitCommand := strings.Fields(runCommand)
@@ -106,6 +112,7 @@ func (command Command) Run(configuration *Configuration) {
 			}
 		}
 	} else {
+		log.WithFields(logFields).Debug("command not running")
 		if configuration.HasFlag("verbose") {
 			fmt.Printf(color.YellowString("Command")+" \"%s\" "+color.YellowString("not run.\n"), runCommand)
 			fmt.Println("    condition: " + failConditionString + " not met\n")

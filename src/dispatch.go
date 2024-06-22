@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/monobot/dispatch/src/discovery"
+	"github.com/monobot/dispatch/src/environment"
 	"github.com/monobot/dispatch/src/models"
+	log "github.com/sirupsen/logrus"
 )
 
 func parseCommandLineArgs() ([]string, models.ContextData) {
@@ -51,6 +53,8 @@ func parseCommandLineArgs() ([]string, models.ContextData) {
 }
 
 func main() {
+	environment.ConfigureLogger()
+	log.Info("Starting dispatch")
 	tasksRequested, contextData := parseCommandLineArgs()
 	configuration := models.BuildConfiguration(discovery.TaskDiscovery(), contextData)
 
@@ -58,7 +62,7 @@ func main() {
 	for _, taskName := range tasksRequested {
 		_, ok := configuration.Tasks[taskName]
 		if !ok {
-			fmt.Printf("Unkwown task %s!\n", taskName)
+			fmt.Printf("unknown task %s!\n", taskName)
 			return
 		}
 		taskToRun := configuration.Tasks[taskName]
