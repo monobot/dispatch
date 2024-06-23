@@ -191,7 +191,7 @@ func (task Task) Help(indentCount int, detailed bool) {
 	fmt.Println("")
 }
 
-func (task Task) Run(configuration *Configuration) {
+func (task Task) Run(configuration *Configuration) (string, error) {
 	allowance := true
 	parameterString := ""
 	for _, param := range task.Params {
@@ -209,8 +209,10 @@ func (task Task) Run(configuration *Configuration) {
 			fmt.Printf("\"%v\" validated to: %v", param.HelpString(), allowed)
 		}
 	}
-
+	totalCount := 0
+	failedCount := 0
 	if allowance {
+		totalCount += 1
 		successfullyRun := true
 		for _, command := range task.Commands {
 			// check params condition met
@@ -221,7 +223,8 @@ func (task Task) Run(configuration *Configuration) {
 		}
 
 		if !successfullyRun {
-			fmt.Println("task \"" + task.Name + "\" failed")
+			failedCount += 1
+			color.Red("... failed")
 		} else {
 			if configuration.HasFlag("verbose") {
 				fmt.Println("task \"" + task.Name + "\" completed")
@@ -232,6 +235,12 @@ func (task Task) Run(configuration *Configuration) {
 		if configuration.HasFlag("verbose") {
 			fmt.Println("task \"" + task.Name + "\"  not run, " + parameterString + "\n")
 		}
+	}
+
+	if failedCount > 0 {
+		return "%v/%v commands failed", fmt.Errorf("task %s failed", task.Name)
+	} else {
+		return "", nil
 	}
 }
 

@@ -71,6 +71,8 @@ func main() {
 	fmt.Printf("contextData: %v\n", contextData)
 	configuration := models.BuildConfiguration(discovery.TaskDiscovery(), contextData)
 
+	totalCount := 0
+	failedCount := 0
 	// RUN TASKS
 	for _, taskName := range tasksRequested {
 		_, ok := configuration.Tasks[taskName]
@@ -79,15 +81,22 @@ func main() {
 			return
 		}
 		taskToRun := configuration.Tasks[taskName]
-
+		totalCount += 1
 		if taskName == "help" {
 			models.Help(configuration)
 		} else {
 			if configuration.HasFlag("help") {
 				taskToRun.Help(0, true)
 			} else {
-				taskToRun.Run(configuration)
+				message, err := taskToRun.Run(configuration)
+				if err != nil && configuration.HasFlag("verbose") {
+					failedCount += 1
+					fmt.Printf(color.RedString(taskName) + " " + message)
+				}
 			}
 		}
+	}
+	if failedCount > 0 {
+		fmt.Printf("failed %d out of %d tasks\n", failedCount, totalCount)
 	}
 }
