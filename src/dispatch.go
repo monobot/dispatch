@@ -2,14 +2,14 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/monobot/dispatch/src/discovery"
-	"github.com/monobot/dispatch/src/environment"
 	"github.com/monobot/dispatch/src/models"
-	log "github.com/sirupsen/logrus"
 )
 
 func parseCommandLineArgs() ([]string, models.ContextData, error) {
@@ -46,13 +46,11 @@ func parseCommandLineArgs() ([]string, models.ContextData, error) {
 					return nil, contextData, errors.New("Invalid param -" + param)
 				}
 
-				if len(taskNameSplit) == 1 {
-					parsedParams[paramName] = ""
-				} else {
+				if len(taskNameSplit) > 1 {
 					if len(taskNameSplit) > 2 {
 						return nil, contextData, errors.New(strings.Join(taskNameSplit, "="))
 					}
-					parsedParams[paramName] = taskNameSplit[1]
+					parsedParams[taskNameSplit[0]] = taskNameSplit[1]
 				}
 			}
 		}
@@ -68,32 +66,39 @@ func parseCommandLineArgs() ([]string, models.ContextData, error) {
 }
 
 func main() {
-	environment.ConfigureLogger()
-	log.Info("Starting dispatch")
 	tasksRequested, contextData, err := parseCommandLineArgs()
 	if err != nil {
-		log.Errorf("Error parsing command line arguments \"%s\"", err)
+		fmt.Printf(color.RedString("Error!")+" parsing command line arguments \"%s\"", err)
 		return
 	}
 	configuration := models.BuildConfiguration(discovery.TaskDiscovery(), contextData)
 
+	totalCount := 0
+	failedCount := 0
 	// RUN TASKS
 	for _, taskName := range tasksRequested {
 		_, ok := configuration.Tasks[taskName]
 		if !ok {
-			log.Errorf("unknown task %s!\n", taskName)
+			fmt.Printf("unknown task %s!\n", taskName)
 			return
 		}
 		taskToRun := configuration.Tasks[taskName]
-
+		totalCount += 1
 		if taskName == "help" {
 			models.Help(configuration)
 		} else {
 			if configuration.HasFlag("help") {
 				taskToRun.Help(0, true)
 			} else {
-				taskToRun.Run(configuration)
+				message, err := taskToRun.Run(configuration)
+				if err != nil {
+					failedCount += 1
+					fmt.Printf(color.RedString(taskName) + " " + message + "\n")
+				}
 			}
 		}
+	}
+	if failedCount > 0 {
+		fmt.Printf("\n%v\\%v tasks "+color.RedString("failed\n"), failedCount, totalCount)
 	}
 }

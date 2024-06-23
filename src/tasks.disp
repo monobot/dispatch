@@ -22,6 +22,12 @@
                             "value": "ok",
                             "allowance": false
                         }
+                    ],
+                    "params": [
+                        {
+                            "name": "param",
+                            "default": "param"
+                        }
                     ]
                 },
                 {
@@ -32,11 +38,17 @@
                 "HOLA",
                 "ADIOS"
             ],
+            "conditions": [
+                {
+                    "variable": "param",
+                    "value": "ok",
+                    "allowance": false
+                }
+            ]
             "params": [
                 {
                     "name": "param",
-                    "default": "param",
-                    "mandatory": true
+                    "default": "param"
                 }
             ]
         },

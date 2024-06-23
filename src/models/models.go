@@ -7,14 +7,10 @@ import (
 
 	"bytes"
 	"os/exec"
-	"reflect"
 	"strings"
 	"text/template"
 
-	"github.com/monobot/dispatch/src/environment"
-
 	"github.com/fatih/color"
-	log "github.com/sirupsen/logrus"
 
 	"golang.org/x/exp/slices"
 )
@@ -40,10 +36,16 @@ func (condition Condition) Help(indentCount int) {
 	fmt.Printf("%s    When "+conditionString+"\n", indentString)
 }
 
+type Executable interface {
+	IsAllowed(configuration *Configuration) bool
+	Run(configuration *Configuration) (string, error)
+	Help(configuration *Configuration)
+}
+
 type Command struct {
-	Command    string      `json:"command" yaml:"command"`
+	Command string `json:"command" yaml:"command"`
+
 	Conditions []Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
-	Allowed    bool
 }
 
 func (command Command) Help(indentCount int) {
@@ -58,9 +60,7 @@ func (command Command) Help(indentCount int) {
 	}
 }
 
-func (command Command) Run(configuration *Configuration) error {
-	logFields := log.Fields{"command": command.Command}
-
+func (command Command) IsAllowed(configuration *Configuration) bool {
 	allowance := true
 	failConditionString := ""
 	for _, condition := range command.Conditions {
@@ -77,25 +77,46 @@ func (command Command) Run(configuration *Configuration) error {
 				allowance = allowed
 				failConditionString = condition.HelpString()
 			}
-			log.WithFields(logFields).Debugf("condition \"%v\" validated to: %v", condition.HelpString(), allowed)
 		}
 	}
 
-	template, err := template.New("commandTemplate").Parse(command.Command)
-	if err != nil {
-		return errors.New("can not execute command \""+command.Command+"\" can not be parsed.")
+	if !allowance && configuration.HasFlag("verbose") {
+		fmt.Println("    condition: " + failConditionString + " not met\n")
 	}
+
+	return allowance
+}
+func (command Command) Run(configuration *Configuration) (string, error) {
+	allowance := command.IsAllowed(configuration)
+
+	task, ok := configuration.Tasks[command.Command]
+	if ok {
+		return task.Run(configuration)
+	}
+
+	commandTemplate, err := template.New("commandTemplate").Option("missingkey=error").Parse(command.Command)
+	if err != nil {
+		message := " \"" + command.Command + "\", can not be parsed"
+		return message, err
+	}
+
 	var outputBytes bytes.Buffer
-	if err := template.Option("missingkey=error").Execute(&outputBytes, configuration.ContextData.Data); err != nil {
-		return errors.New("can not execute command \""+command.Command+"\", all parameters could not be infered")
+	if err := commandTemplate.Execute(&outputBytes, configuration.ContextData.Data); err != nil {
+		message := " \"" + command.Command + "\", not all arguments could be inferred"
+		return message, err
 	}
 
 	runCommand := outputBytes.String()
-	dryRun := configuration.HasFlag("dry-run")
+
 	if allowance {
-		log.WithFields(logFields).Debug("command is running")
-		fmt.Printf(color.YellowString("running ")+"\"%s\"\n", runCommand)
-		if !dryRun {
+		isDryRun := configuration.HasFlag("dry-run")
+		prefix := color.YellowString("running ")
+		if isDryRun {
+			prefix = color.CyanString("DRY-RUN ")
+		}
+		fmt.Printf(prefix + "\"" + runCommand + "\"\n")
+
+		if !isDryRun {
 			splitCommand := strings.Fields(runCommand)
 
 			if len(splitCommand) > 0 {
@@ -107,33 +128,25 @@ func (command Command) Run(configuration *Configuration) error {
 				command.Stdout = os.Stdout
 				command.Stderr = os.Stderr
 
-				if err := command.Run(); err != nil {
-					fmt.Println("could not run command: ", err)
+				err := command.Run()
+
+				if err != nil {
+					return color.YellowString("could not run command ") + " %v", err
 				}
 			}
 		}
-	} else {
-		log.WithFields(logFields).Debug("command not running")
-		if configuration.HasFlag("verbose") {
-			fmt.Printf(color.YellowString("Command")+" \"%s\" "+color.YellowString("not run.\n"), runCommand)
-			fmt.Println("    condition: " + failConditionString + " not met\n")
-		}
 	}
 
-	return nil
+	return "", nil
 }
 
 type Parameter struct {
-	Name      string `json:"name" yaml:"name"`
-	Default   string `json:"default" yaml:"default"`
-	Mandatory bool   `json:"mandatory" yaml:"mandatory"`
+	Name    string `json:"name" yaml:"name"`
+	Default string `json:"default" yaml:"default"`
 }
 
 func (param Parameter) HelpString() string {
 	mandatoryString := "is not"
-	if param.Mandatory {
-		mandatoryString = "is"
-	}
 	return mandatoryString + color.YellowString(" mandatory")
 }
 
@@ -144,84 +157,104 @@ func (param Parameter) Help(indentCount int) {
 	if param.Default != "" {
 		defaultString = " default: " + color.YellowString(param.Default)
 	}
-	mandatoryString := ""
-	if param.Mandatory {
-		mandatoryString = " " + param.HelpString()
-	}
-	fmt.Printf("%s    "+color.YellowString(param.Name)+"%s%s\n", indentString, mandatoryString, defaultString)
+
+	fmt.Printf("%s    "+color.YellowString(param.Name)+"%s%s\n", indentString, defaultString)
 }
 
 type Task struct {
-	Name        string      `json:"name" yaml:"name"`
-	Group       string      `json:"group" yaml:"group"`
-	Description string      `json:"description,omitempty" yaml:"description,omitempty"`
-	Commands    []Command   `json:"commands" yaml:"commands"`
-	Envs        []string    `json:"envs,omitempty" yaml:"envs,omitempty"`
-	Params      []Parameter `json:"params,omitempty" yaml:"params,omitempty"`
-	EnvsValues  map[string]string
+	Name        string `json:"name" yaml:"name"`
+	Group       string `json:"group" yaml:"group"`
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	Hidden      bool   `json:"hidden" yaml:"hidden"`
+
+	Commands []Command `json:"commands" yaml:"commands"`
+
+	Conditions []Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+	Params     []Parameter `json:"params,omitempty" yaml:"params,omitempty"`
 }
 
 func (task Task) Help(indentCount int, detailed bool) {
 	indentString := getIndentString(indentCount)
 
-	fmt.Printf("%s"+color.BlueString(task.Name)+":\n", indentString)
-	if task.Description != "" {
-		fmt.Printf("%s    %s\n", indentString, task.Description)
-	}
-	if detailed {
-		if len(task.Commands) > 0 {
-			color.Cyan("%s    Commands:\n", indentString)
-			for _, command := range task.Commands {
-				command.Help(indentCount + 1)
+	if !task.Hidden {
+		fmt.Printf("%s"+color.BlueString(task.Name)+":\n", indentString)
+		if task.Description != "" {
+			fmt.Printf("%s    %s\n", indentString, task.Description)
+		}
+		if detailed {
+			if len(task.Commands) > 0 {
+				color.Cyan("%s    Commands:\n", indentString)
+				for _, command := range task.Commands {
+					command.Help(indentCount + 1)
+				}
 			}
-		}
-		if len(task.Envs) > 0 {
-			color.Cyan("%s    Environments:\n", indentString)
-			environments := strings.Join(task.Envs, ", ")
-			fmt.Printf("%s        %s\n", indentString, environments)
-		}
-		if len(task.Params) > 0 {
-			color.Cyan("%s    Params:\n", indentString)
-			for _, param := range task.Params {
-				param.Help(indentCount + 1)
-			}
-		}
-	}
 
-	fmt.Println("")
+			if len(task.Params) > 0 {
+				color.Cyan("%s    Params:\n", indentString)
+				for _, param := range task.Params {
+					param.Help(indentCount + 1)
+				}
+			}
+		}
+		fmt.Println("")
+	}
 }
 
-func (task Task) Run(configuration *Configuration) {
-	logFields := log.Fields{"task": task.Name}
+func (task Task) IsAllowed(configuration *Configuration) bool {
 	allowance := true
-	parameterString := ""
-	for _, param := range task.Params {
-		allowed := true
+	failConditionString := ""
+	for _, condition := range task.Conditions {
+		contextValue := configuration.ContextData.Data[condition.Variable]
+		if condition != (Condition{}) {
+			allowed := false
+			if condition.Allowance {
+				allowed = contextValue == condition.Value
+			} else {
+				allowed = contextValue != condition.Value
+			}
 
-		if param.Mandatory {
-			allowed = configuration.HasFlag(param.Name)
-		}
-
-		if allowance && !allowed {
-			parameterString = "parameter \"" + color.YellowString(param.Name) + "\" is mandatory"
-			allowance = allowed
-		}
-		log.WithFields(logFields).Debugf("\"%v\" validated to: %v", param.HelpString(), allowed)
-	}
-
-	if allowance {
-		log.WithFields(logFields).Debug("task running")
-		for _, command := range task.Commands {
-			err := command.Run(configuration)
-			if err != nil {
-				log.Errorf("%v\n", err)
+			if allowance && !allowed {
+				allowance = allowed
+				failConditionString = condition.HelpString()
 			}
 		}
-	} else {
-		log.WithFields(logFields).Debug("task not running")
-		if configuration.HasFlag("verbose") {
-			fmt.Printf("task \"%s\" not run, "+parameterString+"\n", task.Name)
+	}
+
+	if !allowance && configuration.HasFlag("verbose") {
+		fmt.Println("    condition: " + failConditionString + " not met\n")
+	}
+
+	return allowance
+}
+func (task Task) Run(configuration *Configuration) (string, error) {
+	taskAllowed := task.IsAllowed(configuration)
+
+	subcommandCount := 0
+	subcommandFailedCount := 0
+	if taskAllowed {
+		subcommandCount += 1
+		successfullyRun := true
+		for _, command := range task.Commands {
+			// check params condition met
+			message, err := command.Run(configuration)
+			if err != nil && successfullyRun {
+				successfullyRun = false
+				fmt.Printf(color.RedString("ERROR:")+" %s\n", message)
+				subcommandFailedCount += 1
+			}
 		}
+
+		if successfullyRun {
+			if configuration.HasFlag("verbose") {
+				fmt.Println(color.CyanString("info: ") + "task \"" + task.Name + "\" completed")
+			}
+		}
+	}
+
+	if subcommandFailedCount > 0 {
+		return color.YellowString("%v\\%v commands failed", subcommandFailedCount, subcommandCount), fmt.Errorf("task %s failed", task.Name)
+	} else {
+		return "", nil
 	}
 }
 
@@ -261,138 +294,10 @@ func (configFile *ConfigFile) Combine(newConfigFile ConfigFile) ConfigFile {
 	}
 }
 
-type ContextData struct {
-	Flags []string
-	Data  map[string]string
-}
-
-func (contextData *ContextData) AddFlag(flag string) {
-	alreadyContains := slices.Contains(contextData.Flags, flag)
-	if !alreadyContains {
-		contextData.Flags = append(contextData.Flags, flag)
-	}
-}
-
-func (contextData *ContextData) HasFlag(flag string) bool {
-	return slices.Contains(contextData.Flags, flag)
-}
-
-func (contextData *ContextData) UpdateDatum(key string, value string) {
-	currentGroupTasks, ok := contextData.Data[key]
-	if !ok || currentGroupTasks == "" {
-		contextData.Data[key] = value
-	}
-}
-func (contextData *ContextData) UpdateData(data map[string]string) {
-	for key, value := range data {
-		contextData.UpdateDatum(key, value)
-	}
-}
-
-type Configuration struct {
-	Params      map[string]Parameter
-	Tasks       map[string]Task
-	TaskGroups  map[string][]string
-	ContextData ContextData
-}
-
-func (configuration *Configuration) HasFlag(flag string) bool {
-	return configuration.ContextData.HasFlag(flag)
-}
-
-func BuildConfiguration(configFiles []ConfigFile, contextData ContextData) *Configuration {
-	// configure default tasks
-	configFile := ConfigFile{
-		Envs: []string{},
-		Tasks: []Task{
-			{
-				Name:        "help",
-				Description: "Show this help",
-				Commands:    []Command{},
-			},
-		},
-	}
-	for _, innerConfig := range configFiles {
-		configFile = configFile.Combine(innerConfig)
-	}
-
-	groups := make(map[string][]string)
-	tasks := make(map[string]Task)
-	envsValues := map[string]string{}
-	for _, task := range configFile.Tasks {
-		tasks[task.Name] = task
-		taskGroup := task.Group
-		if taskGroup == "" {
-			taskGroup = "default"
-		}
-		currentGroupTasks, ok := groups[taskGroup]
-		if !ok {
-			currentGroupTasks = []string{}
-		}
-
-		groups[taskGroup] = append(currentGroupTasks, task.Name)
-
-		for _, param := range task.Params {
-			value, hasKey := envsValues[param.Name]
-			if !hasKey {
-				envsValues[param.Name] = value
-			}
-		}
-	}
-
-	configuration := Configuration{
-		Tasks:      tasks,
-		TaskGroups: groups,
-	}
-	contextData.UpdateData(environment.PopulateVariables(configFile.Envs))
-	contextData.UpdateData(envsValues)
-
-	configuration.ContextData = contextData
-	return &configuration
-}
-
 func getIndentString(nestCount int) string {
 	indent := ""
 	for i := 0; i < nestCount; i++ {
 		indent += "    "
 	}
 	return indent
-}
-
-func PrintHelpGroupTasks(groupTasks []string, configuration *Configuration, indentCount int) {
-	for _, taskName := range groupTasks {
-		task := configuration.Tasks[taskName]
-
-		task.Help(indentCount, configuration.HasFlag("verbose"))
-	}
-}
-
-func Help(configuration *Configuration) {
-	// Print help message
-	fmt.Println("")
-	title := color.New(color.FgRed).Add(color.Bold)
-	title.Println("THIS IS 'dispatch' HELP.")
-	fmt.Println("You can find more information on how to build and configure your own dispatch tasks, here:")
-	fmt.Println("    TODO")
-	fmt.Println("")
-
-	// environments
-	// TODO Rebuild environments
-	// color.Yellow("Environments:\n")
-	// environments := strings.Join(configuration.ConfigFile.Envs, ", ")
-	// fmt.Printf("    %s\n\n", environments)
-
-	// tasks
-	indentCount := 0
-	if len(configuration.TaskGroups) > 1 {
-		indentCount += 1
-	}
-	groupNames := reflect.ValueOf(configuration.TaskGroups).MapKeys()
-	for _, groupName := range groupNames {
-		groupTasks := configuration.TaskGroups[groupName.String()]
-		if len(configuration.TaskGroups) > 1 {
-			color.Yellow("%s:\n", groupName)
-		}
-		PrintHelpGroupTasks(groupTasks, configuration, indentCount)
-	}
 }
