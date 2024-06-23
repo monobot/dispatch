@@ -75,14 +75,13 @@ func (command Command) Run(configuration *Configuration) error {
 
 	commandTemplate, err := template.New("commandTemplate").Option("missingkey=error").Parse(command.Command)
 	if err != nil {
-		message := color.RedString("ERROR:") + " \"" + command.Command + "\", can not be parsed"
-		fmt.Println(message)
+		message := " \"" + command.Command + "\", can not be parsed"
 		return fmt.Errorf(message)
 	}
+
 	var outputBytes bytes.Buffer
 	if err := commandTemplate.Execute(&outputBytes, configuration.ContextData.Data); err != nil {
-		message := color.RedString("ERROR:") + " \"" + command.Command + "\", not all arguments could be inferred"
-		fmt.Println(message)
+		message := " \"" + command.Command + "\", not all arguments could be inferred"
 		return fmt.Errorf(message)
 	}
 
@@ -111,8 +110,7 @@ func (command Command) Run(configuration *Configuration) error {
 				err := command.Run()
 
 				if err != nil {
-					fmt.Println("could not run command: ", err)
-					return err
+					return fmt.Errorf(color.YellowString("could not run command ")+" %v", err)
 				}
 			}
 		}
@@ -198,52 +196,52 @@ func (task Task) Help(indentCount int, detailed bool) {
 }
 
 func (task Task) Run(configuration *Configuration) (string, error) {
-	allowance := true
+	taskAllowed := true
 	parameterString := ""
 	for _, param := range task.Params {
-		allowed := true
+		paramAllowed := true
 
 		if param.Mandatory {
-			allowed = configuration.HasFlag(param.Name)
+			paramAllowed = configuration.HasFlag(param.Name)
 		}
 
-		if allowance && !allowed {
+		if taskAllowed && !paramAllowed {
 			parameterString = "parameter \"" + color.YellowString(param.Name) + "\" is mandatory"
-			allowance = allowed
+			taskAllowed = paramAllowed
 		}
 		if configuration.HasFlag("verbose") {
-			fmt.Printf("\"%v\" validated to: %v", param.HelpString(), allowed)
+			fmt.Printf(color.CyanString("info: ")+"\"%v\" validated to: %v", param.HelpString(), paramAllowed)
 		}
 	}
-	totalCount := 0
-	failedCount := 0
-	if allowance {
-		totalCount += 1
+
+	subcommandCount := 0
+	subcommandFailedCount := 0
+	if taskAllowed {
+		subcommandCount += 1
 		successfullyRun := true
 		for _, command := range task.Commands {
 			// check params condition met
 			err := command.Run(configuration)
 			if err != nil && successfullyRun {
 				successfullyRun = false
+				fmt.Printf(color.RedString("ERROR:")+" %s\n", err)
+				subcommandFailedCount += 1
 			}
 		}
 
-		if !successfullyRun {
-			failedCount += 1
-		} else {
+		if successfullyRun {
 			if configuration.HasFlag("verbose") {
-				fmt.Println("task \"" + task.Name + "\" completed")
+				fmt.Println(color.CyanString("info: ") + "task \"" + task.Name + "\" completed")
 			}
 		}
 	} else {
 		if configuration.HasFlag("verbose") {
-			fmt.Println("task \"" + task.Name + "\"  not run, " + parameterString + "\n")
+			fmt.Println(color.CyanString("info: ") + "task \"" + task.Name + "\"  not run, " + parameterString + "\n")
 		}
 	}
 
-	if failedCount > 0 {
-		return color.YellowString("%v\\%v commands failed", failedCount, totalCount), fmt.Errorf("task %s failed", task.Name)
-		// return fmt.Println("commands failed")
+	if subcommandFailedCount > 0 {
+		return color.YellowString("%v\\%v commands failed", subcommandFailedCount, subcommandCount), fmt.Errorf("task %s failed", task.Name)
 	} else {
 		return "", nil
 	}
