@@ -95,7 +95,6 @@ func BuildConfiguration(configFiles []ConfigFile, contextData ContextData) *Conf
 	contextData.UpdateData(environment.PopulateVariables(configFile.Envs))
 	contextData.UpdateData(envsValues)
 
-	fmt.Println(contextData.Data)
 	configuration.ContextData = contextData
 	return &configuration
 }

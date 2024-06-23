@@ -238,7 +238,8 @@ func (task Task) Run(configuration *Configuration) (string, error) {
 	}
 
 	if failedCount > 0 {
-		return "%v/%v commands failed", fmt.Errorf("task %s failed", task.Name)
+		return color.YellowString("%v\\%v commands failed", failedCount, totalCount), fmt.Errorf("task %s failed", task.Name)
+		// return fmt.Println("commands failed")
 	} else {
 		return "", nil
 	}

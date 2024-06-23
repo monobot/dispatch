@@ -68,7 +68,6 @@ func main() {
 		fmt.Printf(color.RedString("Error!")+" parsing command line arguments \"%s\"", err)
 		return
 	}
-	fmt.Printf("contextData: %v\n", contextData)
 	configuration := models.BuildConfiguration(discovery.TaskDiscovery(), contextData)
 
 	totalCount := 0
@@ -89,14 +88,14 @@ func main() {
 				taskToRun.Help(0, true)
 			} else {
 				message, err := taskToRun.Run(configuration)
-				if err != nil && configuration.HasFlag("verbose") {
+				if err != nil {
 					failedCount += 1
-					fmt.Printf(color.RedString(taskName) + " " + message)
+					fmt.Printf(color.RedString(taskName) + " " + message + "\n")
 				}
 			}
 		}
 	}
 	if failedCount > 0 {
-		fmt.Printf("failed %d out of %d tasks\n", failedCount, totalCount)
+		fmt.Printf("\n%v\\%v tasks "+color.RedString("failed\n"), failedCount, totalCount)
 	}
 }
