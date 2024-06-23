@@ -35,6 +35,12 @@ func (condition Condition) Help(indentCount int) {
 	fmt.Printf("%s    When "+conditionString+"\n", indentString)
 }
 
+type Executable interface {
+	IsAllowed(configuration *Configuration) bool
+	Run(configuration *Configuration) (string, error)
+	Help(configuration *Configuration)
+}
+
 type Command struct {
 	Command    string      `json:"command" yaml:"command"`
 	Conditions []Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
@@ -53,7 +59,7 @@ func (command Command) Help(indentCount int) {
 	}
 }
 
-func (command Command) Run(configuration *Configuration) error {
+func (command Command) IsAllowed(configuration *Configuration) bool {
 	allowance := true
 	failConditionString := ""
 	for _, condition := range command.Conditions {
@@ -73,16 +79,31 @@ func (command Command) Run(configuration *Configuration) error {
 		}
 	}
 
+	if !allowance && configuration.HasFlag("verbose") {
+		fmt.Println("    condition: " + failConditionString + " not met\n")
+	}
+
+	return allowance
+}
+func (command Command) Run(configuration *Configuration) (string, error) {
+	allowance := command.IsAllowed(configuration)
+
+	task, ok := configuration.Tasks[command.Command]
+	if ok {
+		_, err := task.Run(configuration)
+		return "", err
+	}
+
 	commandTemplate, err := template.New("commandTemplate").Option("missingkey=error").Parse(command.Command)
 	if err != nil {
 		message := " \"" + command.Command + "\", can not be parsed"
-		return fmt.Errorf(message)
+		return message, err
 	}
 
 	var outputBytes bytes.Buffer
 	if err := commandTemplate.Execute(&outputBytes, configuration.ContextData.Data); err != nil {
 		message := " \"" + command.Command + "\", not all arguments could be inferred"
-		return fmt.Errorf(message)
+		return message, err
 	}
 
 	runCommand := outputBytes.String()
@@ -91,7 +112,7 @@ func (command Command) Run(configuration *Configuration) error {
 		isDryRun := configuration.HasFlag("dry-run")
 		prefix := color.YellowString("running ")
 		if isDryRun {
-			prefix = color.RedString("DRY-RUN ")
+			prefix = color.CyanString("DRY-RUN ")
 		}
 		fmt.Printf(prefix + "\"" + runCommand + "\"\n")
 
@@ -110,18 +131,13 @@ func (command Command) Run(configuration *Configuration) error {
 				err := command.Run()
 
 				if err != nil {
-					return fmt.Errorf(color.YellowString("could not run command ")+" %v", err)
+					return color.YellowString("could not run command ") + " %v", err
 				}
 			}
 		}
-	} else {
-		if configuration.HasFlag("verbose") {
-			fmt.Printf(color.YellowString("Command")+" \"%s\" "+color.YellowString("not run.\n"), runCommand)
-			fmt.Println("    condition: " + failConditionString + " not met\n")
-		}
 	}
 
-	return nil
+	return "", nil
 }
 
 type Parameter struct {
@@ -194,8 +210,7 @@ func (task Task) Help(indentCount int, detailed bool) {
 		fmt.Println("")
 	}
 }
-
-func (task Task) Run(configuration *Configuration) (string, error) {
+func (task Task) IsAllowed(configuration *Configuration) bool {
 	taskAllowed := true
 	parameterString := ""
 	for _, param := range task.Params {
@@ -214,6 +229,15 @@ func (task Task) Run(configuration *Configuration) (string, error) {
 		}
 	}
 
+	if !taskAllowed && configuration.HasFlag("verbose") {
+		fmt.Println(color.CyanString("info: ") + "task \"" + task.Name + "\"  not run, " + parameterString + "\n")
+	}
+
+	return taskAllowed
+}
+func (task Task) Run(configuration *Configuration) (string, error) {
+	taskAllowed := task.IsAllowed(configuration)
+
 	subcommandCount := 0
 	subcommandFailedCount := 0
 	if taskAllowed {
@@ -221,10 +245,10 @@ func (task Task) Run(configuration *Configuration) (string, error) {
 		successfullyRun := true
 		for _, command := range task.Commands {
 			// check params condition met
-			err := command.Run(configuration)
+			message, err := command.Run(configuration)
 			if err != nil && successfullyRun {
 				successfullyRun = false
-				fmt.Printf(color.RedString("ERROR:")+" %s\n", err)
+				fmt.Printf(color.RedString("ERROR:")+" %s\n", message)
 				subcommandFailedCount += 1
 			}
 		}
@@ -233,10 +257,6 @@ func (task Task) Run(configuration *Configuration) (string, error) {
 			if configuration.HasFlag("verbose") {
 				fmt.Println(color.CyanString("info: ") + "task \"" + task.Name + "\" completed")
 			}
-		}
-	} else {
-		if configuration.HasFlag("verbose") {
-			fmt.Println(color.CyanString("info: ") + "task \"" + task.Name + "\"  not run, " + parameterString + "\n")
 		}
 	}
 
