@@ -73,15 +73,17 @@ func (command Command) Run(configuration *Configuration) error {
 		}
 	}
 
-	template, err := template.New("commandTemplate").Parse(command.Command)
+	commandTemplate, err := template.New("commandTemplate").Option("missingkey=error").Parse(command.Command)
 	if err != nil {
-		// this should not pass silently
-		fmt.Println(err)
+		message := color.RedString("ERROR:") + " \"" + command.Command + "\", can not be parsed"
+		fmt.Println(message)
+		return fmt.Errorf(message)
 	}
 	var outputBytes bytes.Buffer
-	if err := template.Execute(&outputBytes, configuration.ContextData.Data); err != nil {
-		// this should not pass silently
-		fmt.Println(err)
+	if err := commandTemplate.Execute(&outputBytes, configuration.ContextData.Data); err != nil {
+		message := color.RedString("ERROR:") + " \"" + command.Command + "\", not all arguments could be inferred"
+		fmt.Println(message)
+		return fmt.Errorf(message)
 	}
 
 	runCommand := outputBytes.String()
@@ -159,36 +161,40 @@ type Task struct {
 	Commands    []Command   `json:"commands" yaml:"commands"`
 	Envs        []string    `json:"envs,omitempty" yaml:"envs,omitempty"`
 	Params      []Parameter `json:"params,omitempty" yaml:"params,omitempty"`
-	EnvsValues  map[string]string
+	Hidden      bool        `json:"hidden" yaml:"hidden"`
+
+	EnvsValues map[string]string
 }
 
 func (task Task) Help(indentCount int, detailed bool) {
 	indentString := getIndentString(indentCount)
 
-	fmt.Printf("%s"+color.BlueString(task.Name)+":\n", indentString)
-	if task.Description != "" {
-		fmt.Printf("%s    %s\n", indentString, task.Description)
-	}
-	if detailed {
-		if len(task.Commands) > 0 {
-			color.Cyan("%s    Commands:\n", indentString)
-			for _, command := range task.Commands {
-				command.Help(indentCount + 1)
+	if !task.Hidden {
+		fmt.Printf("%s"+color.BlueString(task.Name)+":\n", indentString)
+		if task.Description != "" {
+			fmt.Printf("%s    %s\n", indentString, task.Description)
+		}
+		if detailed {
+			if len(task.Commands) > 0 {
+				color.Cyan("%s    Commands:\n", indentString)
+				for _, command := range task.Commands {
+					command.Help(indentCount + 1)
+				}
+			}
+			if len(task.Envs) > 0 {
+				color.Cyan("%s    Environments:\n", indentString)
+				environments := strings.Join(task.Envs, ", ")
+				fmt.Printf("%s        %s\n", indentString, environments)
+			}
+			if len(task.Params) > 0 {
+				color.Cyan("%s    Params:\n", indentString)
+				for _, param := range task.Params {
+					param.Help(indentCount + 1)
+				}
 			}
 		}
-		if len(task.Envs) > 0 {
-			color.Cyan("%s    Environments:\n", indentString)
-			environments := strings.Join(task.Envs, ", ")
-			fmt.Printf("%s        %s\n", indentString, environments)
-		}
-		if len(task.Params) > 0 {
-			color.Cyan("%s    Params:\n", indentString)
-			for _, param := range task.Params {
-				param.Help(indentCount + 1)
-			}
-		}
+		fmt.Println("")
 	}
-	fmt.Println("")
 }
 
 func (task Task) Run(configuration *Configuration) (string, error) {
@@ -224,13 +230,11 @@ func (task Task) Run(configuration *Configuration) (string, error) {
 
 		if !successfullyRun {
 			failedCount += 1
-			color.Red("... failed")
 		} else {
 			if configuration.HasFlag("verbose") {
 				fmt.Println("task \"" + task.Name + "\" completed")
 			}
 		}
-
 	} else {
 		if configuration.HasFlag("verbose") {
 			fmt.Println("task \"" + task.Name + "\"  not run, " + parameterString + "\n")
