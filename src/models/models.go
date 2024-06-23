@@ -42,9 +42,9 @@ type Executable interface {
 }
 
 type Command struct {
-	Command    string      `json:"command" yaml:"command"`
+	Command string `json:"command" yaml:"command"`
+
 	Conditions []Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
-	Allowed    bool
 }
 
 func (command Command) Help(indentCount int) {
@@ -90,8 +90,7 @@ func (command Command) Run(configuration *Configuration) (string, error) {
 
 	task, ok := configuration.Tasks[command.Command]
 	if ok {
-		_, err := task.Run(configuration)
-		return "", err
+		return task.Run(configuration)
 	}
 
 	commandTemplate, err := template.New("commandTemplate").Option("missingkey=error").Parse(command.Command)
@@ -141,16 +140,12 @@ func (command Command) Run(configuration *Configuration) (string, error) {
 }
 
 type Parameter struct {
-	Name      string `json:"name" yaml:"name"`
-	Default   string `json:"default" yaml:"default"`
-	Mandatory bool   `json:"mandatory" yaml:"mandatory"`
+	Name    string `json:"name" yaml:"name"`
+	Default string `json:"default" yaml:"default"`
 }
 
 func (param Parameter) HelpString() string {
 	mandatoryString := "is not"
-	if param.Mandatory {
-		mandatoryString = "is"
-	}
 	return mandatoryString + color.YellowString(" mandatory")
 }
 
@@ -161,23 +156,20 @@ func (param Parameter) Help(indentCount int) {
 	if param.Default != "" {
 		defaultString = " default: " + color.YellowString(param.Default)
 	}
-	mandatoryString := ""
-	if param.Mandatory {
-		mandatoryString = " " + param.HelpString()
-	}
-	fmt.Printf("%s    "+color.YellowString(param.Name)+"%s%s\n", indentString, mandatoryString, defaultString)
+
+	fmt.Printf("%s    "+color.YellowString(param.Name)+"%s%s\n", indentString, defaultString)
 }
 
 type Task struct {
-	Name        string      `json:"name" yaml:"name"`
-	Group       string      `json:"group" yaml:"group"`
-	Description string      `json:"description,omitempty" yaml:"description,omitempty"`
-	Commands    []Command   `json:"commands" yaml:"commands"`
-	Envs        []string    `json:"envs,omitempty" yaml:"envs,omitempty"`
-	Params      []Parameter `json:"params,omitempty" yaml:"params,omitempty"`
-	Hidden      bool        `json:"hidden" yaml:"hidden"`
+	Name        string `json:"name" yaml:"name"`
+	Group       string `json:"group" yaml:"group"`
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	Hidden      bool   `json:"hidden" yaml:"hidden"`
 
-	EnvsValues map[string]string
+	Commands []Command `json:"commands" yaml:"commands"`
+
+	Conditions []Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+	Params     []Parameter `json:"params,omitempty" yaml:"params,omitempty"`
 }
 
 func (task Task) Help(indentCount int, detailed bool) {
@@ -195,11 +187,7 @@ func (task Task) Help(indentCount int, detailed bool) {
 					command.Help(indentCount + 1)
 				}
 			}
-			if len(task.Envs) > 0 {
-				color.Cyan("%s    Environments:\n", indentString)
-				environments := strings.Join(task.Envs, ", ")
-				fmt.Printf("%s        %s\n", indentString, environments)
-			}
+
 			if len(task.Params) > 0 {
 				color.Cyan("%s    Params:\n", indentString)
 				for _, param := range task.Params {
@@ -210,30 +198,32 @@ func (task Task) Help(indentCount int, detailed bool) {
 		fmt.Println("")
 	}
 }
+
 func (task Task) IsAllowed(configuration *Configuration) bool {
-	taskAllowed := true
-	parameterString := ""
-	for _, param := range task.Params {
-		paramAllowed := true
+	allowance := true
+	failConditionString := ""
+	for _, condition := range task.Conditions {
+		contextValue := configuration.ContextData.Data[condition.Variable]
+		if condition != (Condition{}) {
+			allowed := false
+			if condition.Allowance {
+				allowed = contextValue == condition.Value
+			} else {
+				allowed = contextValue != condition.Value
+			}
 
-		if param.Mandatory {
-			paramAllowed = configuration.HasFlag(param.Name)
-		}
-
-		if taskAllowed && !paramAllowed {
-			parameterString = "parameter \"" + color.YellowString(param.Name) + "\" is mandatory"
-			taskAllowed = paramAllowed
-		}
-		if configuration.HasFlag("verbose") {
-			fmt.Printf(color.CyanString("info: ")+"\"%v\" validated to: %v", param.HelpString(), paramAllowed)
+			if allowance && !allowed {
+				allowance = allowed
+				failConditionString = condition.HelpString()
+			}
 		}
 	}
 
-	if !taskAllowed && configuration.HasFlag("verbose") {
-		fmt.Println(color.CyanString("info: ") + "task \"" + task.Name + "\"  not run, " + parameterString + "\n")
+	if !allowance && configuration.HasFlag("verbose") {
+		fmt.Println("    condition: " + failConditionString + " not met\n")
 	}
 
-	return taskAllowed
+	return allowance
 }
 func (task Task) Run(configuration *Configuration) (string, error) {
 	taskAllowed := task.IsAllowed(configuration)

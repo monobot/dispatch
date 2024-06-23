@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/monobot/dispatch/src/environment"
@@ -38,7 +39,9 @@ func (contextData *ContextData) UpdateData(data map[string]string) {
 }
 
 type Configuration struct {
-	Params      map[string]Parameter
+	Params map[string]Parameter
+	Envs   []string
+
 	Tasks       map[string]Task
 	TaskGroups  map[string][]string
 	ContextData ContextData
@@ -90,6 +93,7 @@ func BuildConfiguration(configFiles []ConfigFile, contextData ContextData) *Conf
 
 	configuration := Configuration{
 		Tasks:      tasks,
+		Envs:       configFile.Envs,
 		TaskGroups: groups,
 	}
 	contextData.UpdateData(environment.PopulateVariables(configFile.Envs))
@@ -117,9 +121,9 @@ func Help(configuration *Configuration) {
 	fmt.Println("")
 
 	// environments
-	// color.Yellow("Environments:\n")
-	// environments := strings.Join(configuration.ConfigFile.Envs, ", ")
-	// fmt.Printf("    %s\n\n", environments)
+	color.Yellow("Environments:\n")
+	environments := strings.Join(configuration.Envs, ", ")
+	fmt.Printf("    %s\n\n", environments)
 
 	// tasks
 	indentCount := 0
