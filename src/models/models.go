@@ -3,10 +3,9 @@ package models
 import (
 	"fmt"
 	"os"
-	"errors"
+	"os/exec"
 
 	"bytes"
-	"os/exec"
 	"strings"
 	"text/template"
 
