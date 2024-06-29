@@ -2,6 +2,8 @@ package environment
 
 import (
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
 func GetEnvironmentVariable(variableKey string) string {
@@ -15,4 +17,9 @@ func PopulateVariables(environmentKeys []string) map[string]string {
 	}
 
 	return newEnvironmentMap
+}
+
+func PopulateFromEnvFile(envFilePath string) map[string]string {
+	envFile, _ := godotenv.Read(envFilePath)
+	return envFile
 }

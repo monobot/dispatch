@@ -167,6 +167,7 @@ type Task struct {
 	Hidden      bool   `json:"hidden" yaml:"hidden"`
 
 	Commands []Command `json:"commands" yaml:"commands"`
+	Async    bool      `json:"async" yaml:"async"`
 
 	Conditions []Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
 	Params     []Parameter `json:"params,omitempty" yaml:"params,omitempty"`
