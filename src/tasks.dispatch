@@ -44,7 +44,7 @@
                     "value": "ok",
                     "allowance": false
                 }
-            ]
+            ],
             "params": [
                 {
                     "name": "param",
@@ -66,7 +66,7 @@
             ]
         },
         {
-            "name": "task-condition-negative (integer)",
+            "name": "task-condition-negative",
             "group": "TASKS",
             "description": "task will be tun if the condition is not met",
             "commands": [
@@ -128,5 +128,9 @@
                 }
             ]
         }
+    ],
+    "env_files": [
+        ".env",
+        "/home/monobot/code/sanctions.io/developer.env"
     ]
 }

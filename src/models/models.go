@@ -259,8 +259,9 @@ func (task Task) Run(configuration *Configuration) (string, error) {
 }
 
 type ConfigFile struct {
-	Envs  []string `json:"envs" yaml:"envs"`
-	Tasks []Task   `json:"tasks" yaml:"tasks"`
+	Envs     []string `json:"envs" yaml:"envs"`
+	EnvFiles []string `json:"env_files" yaml:"env_files"`
+	Tasks    []Task   `json:"tasks" yaml:"tasks"`
 }
 
 func (configFile *ConfigFile) TaskNames() []string {
@@ -272,10 +273,12 @@ func (configFile *ConfigFile) TaskNames() []string {
 }
 
 func (configFile *ConfigFile) Combine(newConfigFile ConfigFile) ConfigFile {
-	combinedEnvironments := configFile.Envs
+	combinedEnvFiles := append(configFile.EnvFiles, newConfigFile.EnvFiles...)
+
+	combinedEnvs := configFile.Envs
 	for _, env := range newConfigFile.Envs {
-		if !slices.Contains(combinedEnvironments, env) {
-			combinedEnvironments = append(combinedEnvironments, env)
+		if !slices.Contains(combinedEnvs, env) {
+			combinedEnvs = append(combinedEnvs, env)
 		}
 	}
 
@@ -289,8 +292,9 @@ func (configFile *ConfigFile) Combine(newConfigFile ConfigFile) ConfigFile {
 	}
 
 	return ConfigFile{
-		Envs:  combinedEnvironments,
-		Tasks: newTasks,
+		Envs:     combinedEnvs,
+		EnvFiles: combinedEnvFiles,
+		Tasks:    newTasks,
 	}
 }
 

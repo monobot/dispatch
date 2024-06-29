@@ -20,6 +20,6 @@ func PopulateVariables(environmentKeys []string) map[string]string {
 }
 
 func PopulateFromEnvFile(envFilePath string) map[string]string {
-	envFile, _ := godotenv.Read(envFilePath)
-	return envFile
+	parsedEnvValues, _ := godotenv.Read(envFilePath)
+	return parsedEnvValues
 }

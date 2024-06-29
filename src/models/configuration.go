@@ -96,6 +96,10 @@ func BuildConfiguration(configFiles []ConfigFile, contextData ContextData) *Conf
 		Envs:       configFile.Envs,
 		TaskGroups: groups,
 	}
+
+	for _, envFile := range configFile.EnvFiles {
+		contextData.UpdateData(environment.PopulateFromEnvFile(envFile))
+	}
 	contextData.UpdateData(environment.PopulateVariables(configFile.Envs))
 	contextData.UpdateData(envsValues)
 
