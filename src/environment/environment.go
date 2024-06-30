@@ -13,7 +13,10 @@ func GetEnvironmentVariable(variableKey string) string {
 func PopulateVariables(environmentKeys []string) map[string]string {
 	newEnvironmentMap := make(map[string]string)
 	for _, v := range environmentKeys {
-		newEnvironmentMap[v] = GetEnvironmentVariable(v)
+		envValue := GetEnvironmentVariable(v)
+		if envValue != "" {
+			newEnvironmentMap[v] = envValue
+		}
 	}
 
 	return newEnvironmentMap

@@ -128,12 +128,13 @@ type Task struct {
 
 func (task *Task) SetContextData(configuration *Configuration) {
 	contextData := configuration.ConfigurationData.ContextData
+	if contextData == nil {
+		contextData = make(map[string]string)
+	}
+
 	for _, param := range task.Params {
-		_, ok := contextData[param.Name]
-		if !ok {
-			if contextData == nil {
-				contextData = make(map[string]string)
-			}
+		currentValue, ok := contextData[param.Name]
+		if !ok || currentValue == "" {
 			contextData[param.Name] = param.Default
 		}
 	}
@@ -198,14 +199,19 @@ func (task *Task) IsAllowed(configuration *Configuration) bool {
 
 	return allowance
 }
+
 func (task Task) RunCommand(index int, configuration *Configuration, contextData map[string]string) (string, error) {
 	command := task.Commands[index]
 
 	allowance := command.IsAllowed(configuration, task.ContextData)
 
-	_, ok := configuration.Tasks[command.Command]
-	if ok {
-		return configuration.RunTask(command.Command)
+	taskPrefix := "TASK:"
+	if strings.HasPrefix(command.Command, taskPrefix) {
+		trimmedCommand := strings.TrimPrefix(command.Command, taskPrefix)
+		_, ok := configuration.Tasks[trimmedCommand]
+		if ok {
+			return configuration.RunTask(trimmedCommand)
+		}
 	}
 
 	commandTemplate, err := template.New("commandTemplate").Option("missingkey=error").Parse(command.Command)
@@ -225,9 +231,6 @@ func (task Task) RunCommand(index int, configuration *Configuration, contextData
 	if allowance {
 		isDryRun := configuration.HasFlag("dry-run")
 		prefix := color.YellowString("running ")
-		if isDryRun {
-			prefix = color.CyanString("DRY-RUN ")
-		}
 		fmt.Printf(prefix + "\"" + runCommand + "\"\n")
 
 		if !isDryRun {
@@ -249,7 +252,11 @@ func (task Task) RunCommand(index int, configuration *Configuration, contextData
 				}
 			}
 		}
+	} else {
+		prefix := color.YellowString("skipping ")
+		fmt.Printf(prefix + "\"" + runCommand + "\"\n")
 	}
+
 	return "", nil
 }
 

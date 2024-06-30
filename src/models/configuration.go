@@ -28,7 +28,14 @@ func (configurationData *ConfigurationData) HasFlag(flag string) bool {
 
 func UpdateData(sourceMap map[string]string, newMap map[string]string) {
 	for key, value := range newMap {
-		sourceMap[key] = value
+		if value == "" {
+			currentValue, ok := sourceMap[key]
+			if !ok || currentValue == "" {
+				sourceMap[key] = value
+			}
+		} else {
+			sourceMap[key] = value
+		}
 	}
 }
 
@@ -54,6 +61,9 @@ func (configuration *Configuration) RunTask(taskName string) (string, error) {
 	subcommandCount := 0
 	subcommandFailedCount := 0
 	if taskAllowed {
+		if configuration.HasFlag("dry-run") {
+			color.Cyan("DRY-RUN: \n")
+		}
 		subcommandCount += 1
 		successfullyRun := true
 		for idx := range task.Commands {
@@ -119,10 +129,10 @@ func BuildConfiguration(configFiles []ConfigFile, configurationData Configuratio
 	}
 
 	contextData := make(map[string]string)
+	UpdateData(contextData, environment.PopulateVariables(configFile.Envs))
 	for _, envFile := range configFile.EnvFiles {
 		UpdateData(contextData, environment.PopulateFromEnvFile(envFile))
 	}
-	UpdateData(contextData, environment.PopulateVariables(configFile.Envs))
 	UpdateData(contextData, configurationData.ContextData)
 
 	configurationData.ContextData = contextData

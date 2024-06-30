@@ -1,6 +1,5 @@
 {
     "envs": [
-        "HOLA",
         "param"
     ],
     "env_files": [
@@ -20,17 +19,17 @@
                     "command": "echo 'command use {{.param}} {{.param}}'"
                 },
                 {
-                    "command": "echo 'command and passing condition'",
+                    "command": "echo 'blocked when param is block-task'",
                     "conditions": [
                         {
                             "variable": "param",
-                            "value": "ok",
+                            "value": "block-task",
                             "allowance": false
                         }
                     ]
                 },
                 {
-                    "command": "echo 'command with param {{.param}} and NOT passing condition'",
+                    "command": "echo 'blocked when param is block-command'",
                     "conditions": [
                         {
                             "variable": "param",
@@ -40,7 +39,7 @@
                     ]
                 },
                 {
-                    "command": "echo 'command with 2 param and 2 passing condition'",
+                    "command": "echo 'allows when param1 and param2 are empty'",
                     "conditions": [
                         {
                             "variable": "param1",
@@ -55,11 +54,11 @@
                     ]
                 },
                 {
-                    "command": "echo 'command with 2 param and 1 not passing condition'",
+                    "command": "echo 'blocked when param is block-task or block-command'",
                     "conditions": [
                         {
-                            "variable": "param1",
-                            "value": "ok",
+                            "variable": "param",
+                            "value": "block-command",
                             "allowance": false
                         },
                         {
@@ -70,7 +69,7 @@
                     ]
                 },
                 {
-                    "command": "echo 'command with 2 param and 2 not passing condition'",
+                    "command": "echo 'double blocked when param is block-command'",
                     "conditions": [
                         {
                             "variable": "param",
@@ -83,6 +82,9 @@
                             "allowance": false
                         }
                     ]
+                },
+                {
+                    "command": "TASK:pepito"
                 }
             ],
             "envs": [
@@ -99,83 +101,22 @@
             "params": [
                 {
                     "name": "param",
-                    "default": "block-command"
-                }
-            ]
-        },
-        {
-            "name": "task-condition-positive",
-            "group": "TASKS",
-            "description": "task will be tun if the condition is met",
-            "commands": [
-                {
-                    "command": "echo 'condition-positive' run"
+                    "default": "ok"
                 }
             ],
-            "envs": [
-                "ADIOS"
-            ]
+            "on_success": {
+                "command": "echo 'command that uses param {{.param}}'"
+            },
+            "on_failure": {
+                "command": "echo 'command that uses param {{.param}}'"
+            }
         },
         {
-            "name": "task-condition-negative",
-            "group": "TASKS",
-            "description": "task will be tun if the condition is not met",
+            "name": "pepito",
+            "description": "task B, description",
             "commands": [
                 {
-                    "command": "echo 'condition-negative (integer)' run",
-                    "conditions": [
-                        {
-                            "variable": "nazi",
-                            "value": "pedro",
-                            "allowance": true
-                        }
-                    ]
-                }
-            ],
-            "envs": [
-                "HOLA",
-                "ADIOS"
-            ]
-        },
-        {
-            "name": "task-condition-positive (bool)",
-            "group": "TASKS",
-            "description": "task will be tun if the condition is not met",
-            "commands": [
-                {
-                    "command": "echo 'condition-positive (bool)' run"
-                }
-            ],
-            "envs": [
-                "HOLA",
-                "ADIOS"
-            ]
-        },
-        {
-            "name": "task-run-hidden",
-            "group": "TASKS",
-            "commands": [
-                {
-                    "command": "echo 'task-run-hidden' run"
-                },
-                {
-                    "command": "{{.task-condition-positive}}"
-                },
-                {
-                    "command": "{{.task-condition-negative}}"
-                }
-            ]
-        },
-        {
-            "name": "task-pre",
-            "group": "PRE TASKS",
-            "description": "task PRE, description",
-            "commands": [
-                {
-                    "command": "echo 'task-pre' command-1"
-                },
-                {
-                    "command": "echo 'task-pre' command-2"
+                    "command": "echo 'pepito'"
                 }
             ]
         }
