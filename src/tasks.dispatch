@@ -1,6 +1,7 @@
 {
     "envs": [
-        "HOLA"
+        "HOLA",
+        "param"
     ],
     "env_files": [
         ".not_exists",
