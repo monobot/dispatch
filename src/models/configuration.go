@@ -123,6 +123,7 @@ func BuildConfiguration(configFiles []ConfigFile, configurationData Configuratio
 		UpdateData(contextData, environment.PopulateFromEnvFile(envFile))
 	}
 	UpdateData(contextData, environment.PopulateVariables(configFile.Envs))
+	UpdateData(contextData, configurationData.ContextData)
 
 	configurationData.ContextData = contextData
 	configuration.ConfigurationData = configurationData
