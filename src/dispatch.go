@@ -12,8 +12,8 @@ import (
 	"github.com/monobot/dispatch/src/models"
 )
 
-func parseCommandLineArgs() ([]string, models.ContextData, error) {
-	contextData := models.ContextData{}
+func parseCommandLineArgs() ([]string, models.ConfigurationData, error) {
+	configurationData := models.ConfigurationData{}
 	tasksRequested := []string{}
 	parsedParams := map[string]string{}
 	flags := []string{}
@@ -43,12 +43,12 @@ func parseCommandLineArgs() ([]string, models.ContextData, error) {
 				flags = append(flags, paramName)
 			} else {
 				if string(param[0]) == "-" {
-					return nil, contextData, errors.New("Invalid param -" + param)
+					return nil, configurationData, errors.New("Invalid param -" + param)
 				}
 
 				if len(taskNameSplit) > 1 {
 					if len(taskNameSplit) > 2 {
-						return nil, contextData, errors.New(strings.Join(taskNameSplit, "="))
+						return nil, configurationData, errors.New(strings.Join(taskNameSplit, "="))
 					}
 					parsedParams[taskNameSplit[0]] = taskNameSplit[1]
 				}
@@ -60,9 +60,9 @@ func parseCommandLineArgs() ([]string, models.ContextData, error) {
 		tasksRequested = []string{"help"}
 	}
 
-	contextData.Data = parsedParams
-	contextData.Flags = flags
-	return tasksRequested, contextData, err
+	configurationData.ContextData = parsedParams
+	configurationData.Flags = flags
+	return tasksRequested, configurationData, err
 }
 
 func main() {
@@ -82,15 +82,14 @@ func main() {
 			fmt.Printf("unknown task %s!\n", taskName)
 			return
 		}
-		taskToRun := configuration.Tasks[taskName]
 		totalCount += 1
 		if taskName == "help" {
 			models.Help(configuration)
 		} else {
 			if configuration.HasFlag("help") {
-				taskToRun.Help(0, true)
+				configuration.Tasks[taskName].Help(0, true)
 			} else {
-				message, err := taskToRun.Run(configuration)
+				message, err := configuration.RunTask(taskName)
 				if err != nil {
 					failedCount += 1
 					fmt.Printf(color.RedString(taskName) + " " + message + "\n")

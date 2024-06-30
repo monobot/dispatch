@@ -10,31 +10,25 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-type ContextData struct {
-	Flags []string
-	Data  map[string]string
+type ConfigurationData struct {
+	Flags       []string
+	ContextData map[string]string
 }
 
-func (contextData *ContextData) AddFlag(flag string) {
-	alreadyContains := slices.Contains(contextData.Flags, flag)
+func (configurationData *ConfigurationData) AddFlag(flag string) {
+	alreadyContains := slices.Contains(configurationData.Flags, flag)
 	if !alreadyContains {
-		contextData.Flags = append(contextData.Flags, flag)
+		configurationData.Flags = append(configurationData.Flags, flag)
 	}
 }
 
-func (contextData *ContextData) HasFlag(flag string) bool {
-	return slices.Contains(contextData.Flags, flag)
+func (configurationData *ConfigurationData) HasFlag(flag string) bool {
+	return slices.Contains(configurationData.Flags, flag)
 }
 
-func (contextData *ContextData) UpdateDatum(key string, value string) {
-	currentGroupTasks, ok := contextData.Data[key]
-	if !ok || currentGroupTasks == "" {
-		contextData.Data[key] = value
-	}
-}
-func (contextData *ContextData) UpdateData(data map[string]string) {
-	for key, value := range data {
-		contextData.UpdateDatum(key, value)
+func UpdateData(sourceMap map[string]string, newMap map[string]string) {
+	for key, value := range newMap {
+		sourceMap[key] = value
 	}
 }
 
@@ -42,16 +36,51 @@ type Configuration struct {
 	Params map[string]Parameter
 	Envs   []string
 
-	Tasks       map[string]Task
-	TaskGroups  map[string][]string
-	ContextData ContextData
+	Tasks             map[string]Task
+	TaskGroups        map[string][]string
+	ConfigurationData ConfigurationData
 }
 
 func (configuration *Configuration) HasFlag(flag string) bool {
-	return configuration.ContextData.HasFlag(flag)
+	return configuration.ConfigurationData.HasFlag(flag)
 }
 
-func BuildConfiguration(configFiles []ConfigFile, contextData ContextData) *Configuration {
+func (configuration *Configuration) RunTask(taskName string) (string, error) {
+	task := configuration.Tasks[taskName]
+	task.SetContextData(configuration)
+
+	taskAllowed := task.IsAllowed(configuration)
+
+	subcommandCount := 0
+	subcommandFailedCount := 0
+	if taskAllowed {
+		subcommandCount += 1
+		successfullyRun := true
+		for idx := range task.Commands {
+			// check params condition met
+			message, err := task.RunCommand(idx, configuration, task.ContextData)
+			if err != nil && successfullyRun {
+				successfullyRun = false
+				fmt.Printf(color.RedString("ERROR:")+" %s\n", message)
+				subcommandFailedCount += 1
+			}
+		}
+
+		if successfullyRun {
+			if configuration.HasFlag("verbose") {
+				fmt.Println(color.CyanString("info: ") + "task \"" + task.Name + "\" completed")
+			}
+		}
+	}
+
+	if subcommandFailedCount > 0 {
+		return color.YellowString("%v\\%v commands failed", subcommandFailedCount, subcommandCount), fmt.Errorf("task %s failed", task.Name)
+	} else {
+		return "", nil
+	}
+}
+
+func BuildConfiguration(configFiles []ConfigFile, configurationData ConfigurationData) *Configuration {
 	// configure default tasks
 	configFile := ConfigFile{
 		Envs: []string{},
@@ -69,7 +98,6 @@ func BuildConfiguration(configFiles []ConfigFile, contextData ContextData) *Conf
 
 	groups := make(map[string][]string)
 	tasks := make(map[string]Task)
-	envsValues := map[string]string{}
 	for _, task := range configFile.Tasks {
 		tasks[task.Name] = task
 		taskGroup := task.Group
@@ -82,13 +110,6 @@ func BuildConfiguration(configFiles []ConfigFile, contextData ContextData) *Conf
 		}
 
 		groups[taskGroup] = append(currentGroupTasks, task.Name)
-
-		for _, param := range task.Params {
-			value, hasKey := envsValues[param.Name]
-			if !hasKey {
-				envsValues[param.Name] = value
-			}
-		}
 	}
 
 	configuration := Configuration{
@@ -97,13 +118,15 @@ func BuildConfiguration(configFiles []ConfigFile, contextData ContextData) *Conf
 		TaskGroups: groups,
 	}
 
+	contextData := make(map[string]string)
 	for _, envFile := range configFile.EnvFiles {
-		contextData.UpdateData(environment.PopulateFromEnvFile(envFile))
+		UpdateData(contextData, environment.PopulateFromEnvFile(envFile))
 	}
-	contextData.UpdateData(environment.PopulateVariables(configFile.Envs))
-	contextData.UpdateData(envsValues)
+	UpdateData(contextData, environment.PopulateVariables(configFile.Envs))
 
-	configuration.ContextData = contextData
+	configurationData.ContextData = contextData
+	configuration.ConfigurationData = configurationData
+
 	return &configuration
 }
 

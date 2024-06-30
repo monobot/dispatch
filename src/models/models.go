@@ -63,7 +63,7 @@ func (command Command) IsAllowed(configuration *Configuration) bool {
 	allowance := true
 	failConditionString := ""
 	for _, condition := range command.Conditions {
-		contextValue := configuration.ContextData.Data[condition.Variable]
+		contextValue := configuration.ConfigurationData.ContextData[condition.Variable]
 		if condition != (Condition{}) {
 			allowed := false
 			if condition.Allowance {
@@ -84,59 +84,6 @@ func (command Command) IsAllowed(configuration *Configuration) bool {
 	}
 
 	return allowance
-}
-func (command Command) Run(configuration *Configuration) (string, error) {
-	allowance := command.IsAllowed(configuration)
-
-	task, ok := configuration.Tasks[command.Command]
-	if ok {
-		return task.Run(configuration)
-	}
-
-	commandTemplate, err := template.New("commandTemplate").Option("missingkey=error").Parse(command.Command)
-	if err != nil {
-		message := " \"" + command.Command + "\", can not be parsed"
-		return message, err
-	}
-
-	var outputBytes bytes.Buffer
-	if err := commandTemplate.Execute(&outputBytes, configuration.ContextData.Data); err != nil {
-		message := " \"" + command.Command + "\", not all arguments could be inferred"
-		return message, err
-	}
-
-	runCommand := outputBytes.String()
-
-	if allowance {
-		isDryRun := configuration.HasFlag("dry-run")
-		prefix := color.YellowString("running ")
-		if isDryRun {
-			prefix = color.CyanString("DRY-RUN ")
-		}
-		fmt.Printf(prefix + "\"" + runCommand + "\"\n")
-
-		if !isDryRun {
-			splitCommand := strings.Fields(runCommand)
-
-			if len(splitCommand) > 0 {
-				baseCmd := splitCommand[0]
-				cmdArgs := splitCommand[1:]
-
-				command := exec.Command(baseCmd, cmdArgs...)
-
-				command.Stdout = os.Stdout
-				command.Stderr = os.Stderr
-
-				err := command.Run()
-
-				if err != nil {
-					return color.YellowString("could not run command ") + " %v", err
-				}
-			}
-		}
-	}
-
-	return "", nil
 }
 
 type Parameter struct {
@@ -171,6 +118,23 @@ type Task struct {
 
 	Conditions []Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
 	Params     []Parameter `json:"params,omitempty" yaml:"params,omitempty"`
+
+	ContextData map[string]string
+}
+
+func (task *Task) SetContextData(configuration *Configuration) {
+	contextData := configuration.ConfigurationData.ContextData
+	for _, param := range task.Params {
+		_, ok := contextData[param.Name]
+		if !ok {
+			if contextData == nil {
+				contextData = make(map[string]string)
+			}
+			contextData[param.Name] = param.Default
+		}
+	}
+
+	task.ContextData = contextData
 }
 
 func (task Task) Help(indentCount int, detailed bool) {
@@ -204,7 +168,7 @@ func (task Task) IsAllowed(configuration *Configuration) bool {
 	allowance := true
 	failConditionString := ""
 	for _, condition := range task.Conditions {
-		contextValue := configuration.ContextData.Data[condition.Variable]
+		contextValue := configuration.ConfigurationData.ContextData[condition.Variable]
 		if condition != (Condition{}) {
 			allowed := false
 			if condition.Allowance {
@@ -217,45 +181,72 @@ func (task Task) IsAllowed(configuration *Configuration) bool {
 				allowance = allowed
 				failConditionString = condition.HelpString()
 			}
-		}
-	}
 
-	if !allowance && configuration.HasFlag("verbose") {
-		fmt.Println("    condition: " + failConditionString + " not met\n")
+			if !allowance && configuration.HasFlag("verbose") {
+				if condition.Allowance {
+					fmt.Println("    condition: " + failConditionString + " not met\n")
+				} else {
+					fmt.Println("    condition: " + failConditionString + " applied\n")
+				}
+			}
+		}
 	}
 
 	return allowance
 }
-func (task Task) Run(configuration *Configuration) (string, error) {
-	taskAllowed := task.IsAllowed(configuration)
+func (task Task) RunCommand(index int, configuration *Configuration, contextData map[string]string) (string, error) {
+	command := task.Commands[index]
 
-	subcommandCount := 0
-	subcommandFailedCount := 0
-	if taskAllowed {
-		subcommandCount += 1
-		successfullyRun := true
-		for _, command := range task.Commands {
-			// check params condition met
-			message, err := command.Run(configuration)
-			if err != nil && successfullyRun {
-				successfullyRun = false
-				fmt.Printf(color.RedString("ERROR:")+" %s\n", message)
-				subcommandFailedCount += 1
-			}
+	allowance := command.IsAllowed(configuration)
+
+	_, ok := configuration.Tasks[command.Command]
+	if ok {
+		return configuration.RunTask(command.Command)
+	}
+
+	commandTemplate, err := template.New("commandTemplate").Option("missingkey=error").Parse(command.Command)
+	if err != nil {
+		message := " \"" + command.Command + "\", can not be parsed"
+		return message, err
+	}
+
+	var outputBytes bytes.Buffer
+	if err := commandTemplate.Execute(&outputBytes, contextData); err != nil {
+		message := " \"" + command.Command + "\", not all arguments could be inferred"
+		return message, err
+	}
+
+	runCommand := outputBytes.String()
+
+	if allowance {
+		isDryRun := configuration.HasFlag("dry-run")
+		prefix := color.YellowString("running ")
+		if isDryRun {
+			prefix = color.CyanString("DRY-RUN ")
 		}
+		fmt.Printf(prefix + "\"" + runCommand + "\"\n")
 
-		if successfullyRun {
-			if configuration.HasFlag("verbose") {
-				fmt.Println(color.CyanString("info: ") + "task \"" + task.Name + "\" completed")
+		if !isDryRun {
+			splitCommand := strings.Fields(runCommand)
+
+			if len(splitCommand) > 0 {
+				baseCmd := splitCommand[0]
+				cmdArgs := splitCommand[1:]
+
+				command := exec.Command(baseCmd, cmdArgs...)
+
+				command.Stdout = os.Stdout
+				command.Stderr = os.Stderr
+
+				err := command.Run()
+
+				if err != nil {
+					return color.YellowString("could not run command ") + " %v", err
+				}
 			}
 		}
 	}
-
-	if subcommandFailedCount > 0 {
-		return color.YellowString("%v\\%v commands failed", subcommandFailedCount, subcommandCount), fmt.Errorf("task %s failed", task.Name)
-	} else {
-		return "", nil
-	}
+	return "", nil
 }
 
 type ConfigFile struct {

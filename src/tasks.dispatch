@@ -2,36 +2,128 @@
     "envs": [
         "HOLA"
     ],
+    "env_files": [
+        ".not_exists",
+        "correct.env"
+    ],
     "tasks": [
         {
-            "name": "task-a",
+            "name": "task-normal",
             "group": "TASKS",
             "description": "task A, description",
             "commands": [
                 {
-                    "command": "echo {{.param}}"
+                    "command": "echo 'command that uses task's param' {{.param}}"
                 },
                 {
-                    "command": "echo {{.HOLA}}"
+                    "command": "echo 'command that uses task's param twice' {{.param}} {{.param}}"
                 },
                 {
-                    "command": "touch task-a",
+                    "command": "echo 'command with param: {{.param1}} and passing condition'",
                     "conditions": [
                         {
-                            "variable": "param",
+                            "variable": "param1",
                             "value": "ok",
                             "allowance": false
                         }
                     ],
                     "params": [
                         {
-                            "name": "param",
+                            "name": "param1",
                             "default": "param"
                         }
                     ]
                 },
                 {
-                    "command": "rm task-a"
+                    "command": "echo 'command with param {{.param1}} and NOT passing condition'",
+                    "conditions": [
+                        {
+                            "variable": "param1",
+                            "value": "ok",
+                            "allowance": false
+                        }
+                    ],
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "ok"
+                        }
+                    ]
+                },
+                {
+                    "command": "echo 'command with 2 param and 2 passing condition'",
+                    "conditions": [
+                        {
+                            "variable": "param1",
+                            "value": "ok",
+                            "allowance": false
+                        },
+                        {
+                            "variable": "param2",
+                            "value": "ok",
+                            "allowance": false
+                        }
+                    ],
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "param1"
+                        },
+                        {
+                            "name": "param2",
+                            "default": "param2"
+                        }
+                    ]
+                },
+                {
+                    "command": "echo 'command with 2 param and 1 not passing condition'",
+                    "conditions": [
+                        {
+                            "variable": "param1",
+                            "value": "ok",
+                            "allowance": false
+                        },
+                        {
+                            "variable": "param2",
+                            "value": "ok",
+                            "allowance": false
+                        }
+                    ],
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "param1"
+                        },
+                        {
+                            "name": "param2",
+                            "default": "ok"
+                        }
+                    ]
+                },
+                {
+                    "command": "echo 'command with 2 param and 2 not passing condition'",
+                    "conditions": [
+                        {
+                            "variable": "param1",
+                            "value": "ok",
+                            "allowance": false
+                        },
+                        {
+                            "variable": "param2",
+                            "value": "ok",
+                            "allowance": false
+                        }
+                    ],
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "ok"
+                        },
+                        {
+                            "name": "param2",
+                            "default": "ok"
+                        }
+                    ]
                 }
             ],
             "envs": [
@@ -48,7 +140,7 @@
             "params": [
                 {
                     "name": "param",
-                    "default": "param"
+                    "default": "o9"
                 }
             ]
         },
@@ -108,10 +200,10 @@
                     "command": "echo 'task-run-hidden' run"
                 },
                 {
-                    "command": "${task-condition-positive}"
+                    "command": "{{.task-condition-positive}}"
                 },
                 {
-                    "command": "${task-condition-negative}"
+                    "command": "{{.task-condition-negative}}"
                 }
             ]
         },
@@ -128,9 +220,5 @@
                 }
             ]
         }
-    ],
-    "env_files": [
-        ".env",
-        "/home/monobot/code/sanctions.io/developer.env"
     ]
 }
