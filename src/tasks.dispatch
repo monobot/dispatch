@@ -13,40 +13,28 @@
             "description": "task A, description",
             "commands": [
                 {
-                    "command": "echo 'command that uses task's param' {{.param}}"
+                    "command": "echo 'command that uses param {{.param}}'"
                 },
                 {
-                    "command": "echo 'command that uses task's param twice' {{.param}} {{.param}}"
+                    "command": "echo 'command use {{.param}} {{.param}}'"
                 },
                 {
-                    "command": "echo 'command with param: {{.param1}} and passing condition'",
+                    "command": "echo 'command and passing condition'",
                     "conditions": [
                         {
-                            "variable": "param1",
+                            "variable": "param",
                             "value": "ok",
                             "allowance": false
-                        }
-                    ],
-                    "params": [
-                        {
-                            "name": "param1",
-                            "default": "param"
                         }
                     ]
                 },
                 {
-                    "command": "echo 'command with param {{.param1}} and NOT passing condition'",
+                    "command": "echo 'command with param {{.param}} and NOT passing condition'",
                     "conditions": [
                         {
-                            "variable": "param1",
-                            "value": "ok",
+                            "variable": "param",
+                            "value": "block-command",
                             "allowance": false
-                        }
-                    ],
-                    "params": [
-                        {
-                            "name": "param1",
-                            "default": "ok"
                         }
                     ]
                 },
@@ -55,23 +43,13 @@
                     "conditions": [
                         {
                             "variable": "param1",
-                            "value": "ok",
-                            "allowance": false
+                            "value": "",
+                            "allowance": true
                         },
                         {
                             "variable": "param2",
-                            "value": "ok",
-                            "allowance": false
-                        }
-                    ],
-                    "params": [
-                        {
-                            "name": "param1",
-                            "default": "param1"
-                        },
-                        {
-                            "name": "param2",
-                            "default": "param2"
+                            "value": "",
+                            "allowance": true
                         }
                     ]
                 },
@@ -84,19 +62,9 @@
                             "allowance": false
                         },
                         {
-                            "variable": "param2",
-                            "value": "ok",
+                            "variable": "param",
+                            "value": "block-command",
                             "allowance": false
-                        }
-                    ],
-                    "params": [
-                        {
-                            "name": "param1",
-                            "default": "param1"
-                        },
-                        {
-                            "name": "param2",
-                            "default": "ok"
                         }
                     ]
                 },
@@ -104,24 +72,14 @@
                     "command": "echo 'command with 2 param and 2 not passing condition'",
                     "conditions": [
                         {
-                            "variable": "param1",
-                            "value": "ok",
+                            "variable": "param",
+                            "value": "block-command",
                             "allowance": false
                         },
                         {
-                            "variable": "param2",
-                            "value": "ok",
+                            "variable": "param",
+                            "value": "block-command",
                             "allowance": false
-                        }
-                    ],
-                    "params": [
-                        {
-                            "name": "param1",
-                            "default": "ok"
-                        },
-                        {
-                            "name": "param2",
-                            "default": "ok"
                         }
                     ]
                 }
@@ -133,14 +91,14 @@
             "conditions": [
                 {
                     "variable": "param",
-                    "value": "ok",
+                    "value": "block",
                     "allowance": false
                 }
             ],
             "params": [
                 {
                     "name": "param",
-                    "default": "o9"
+                    "default": "block-command"
                 }
             ]
         },

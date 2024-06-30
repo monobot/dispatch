@@ -59,7 +59,7 @@ func (command Command) Help(indentCount int) {
 	}
 }
 
-func (command Command) IsAllowed(configuration *Configuration) bool {
+func (command Command) IsAllowed(configuration *Configuration, contextData map[string]string) bool {
 	allowance := true
 	failConditionString := ""
 	for _, condition := range command.Conditions {
@@ -76,11 +76,15 @@ func (command Command) IsAllowed(configuration *Configuration) bool {
 				allowance = allowed
 				failConditionString = condition.HelpString()
 			}
-		}
-	}
 
-	if !allowance && configuration.HasFlag("verbose") {
-		fmt.Println("    condition: " + failConditionString + " not met\n")
+			if !allowance && configuration.HasFlag("verbose") {
+				if condition.Allowance {
+					fmt.Println("    condition: " + failConditionString + " not met\n")
+				} else {
+					fmt.Println("    condition: " + failConditionString + " applied\n")
+				}
+			}
+		}
 	}
 
 	return allowance
@@ -164,11 +168,11 @@ func (task Task) Help(indentCount int, detailed bool) {
 	}
 }
 
-func (task Task) IsAllowed(configuration *Configuration) bool {
+func (task *Task) IsAllowed(configuration *Configuration) bool {
 	allowance := true
 	failConditionString := ""
 	for _, condition := range task.Conditions {
-		contextValue := configuration.ConfigurationData.ContextData[condition.Variable]
+		contextValue := task.ContextData[condition.Variable]
 		if condition != (Condition{}) {
 			allowed := false
 			if condition.Allowance {
@@ -197,7 +201,7 @@ func (task Task) IsAllowed(configuration *Configuration) bool {
 func (task Task) RunCommand(index int, configuration *Configuration, contextData map[string]string) (string, error) {
 	command := task.Commands[index]
 
-	allowance := command.IsAllowed(configuration)
+	allowance := command.IsAllowed(configuration, task.ContextData)
 
 	_, ok := configuration.Tasks[command.Command]
 	if ok {
