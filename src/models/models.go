@@ -103,12 +103,12 @@ func (param Parameter) HelpString() string {
 func (param Parameter) Help(indentCount int) {
 	indentString := getIndentString(indentCount)
 
-	defaultString := ""
+	defaultString := "(no-default)"
 	if param.Default != "" {
-		defaultString = " default: " + color.YellowString(param.Default)
+		defaultString = "default to " + color.YellowString(param.Default)
 	}
 
-	fmt.Printf("%s    "+color.YellowString(param.Name)+"%s%s\n", indentString, defaultString)
+	fmt.Printf("%s    - "+color.YellowString(param.Name)+" %s\n", indentString, defaultString)
 }
 
 type Task struct {
@@ -205,6 +205,7 @@ func (task Task) RunCommand(index int, configuration *Configuration, contextData
 
 	allowance := command.IsAllowed(configuration, task.ContextData)
 
+	// when the command is a task, we can call it directly
 	taskPrefix := "TASK:"
 	if strings.HasPrefix(command.Command, taskPrefix) {
 		trimmedCommand := strings.TrimPrefix(command.Command, taskPrefix)
@@ -242,19 +243,21 @@ func (task Task) RunCommand(index int, configuration *Configuration, contextData
 
 				command := exec.Command(baseCmd, cmdArgs...)
 
+				command.Stdin = os.Stdin
 				command.Stdout = os.Stdout
 				command.Stderr = os.Stderr
 
-				err := command.Run()
+				err := command.Start()
+				if err != nil {
+					return color.YellowString("could not start command ") + " %v", err
+				}
 
+				err = command.Wait()
 				if err != nil {
 					return color.YellowString("could not run command ") + " %v", err
 				}
 			}
 		}
-	} else {
-		prefix := color.YellowString("skipping ")
-		fmt.Printf(prefix + "\"" + runCommand + "\"\n")
 	}
 
 	return "", nil

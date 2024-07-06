@@ -103,13 +103,7 @@
                     "name": "param",
                     "default": "ok"
                 }
-            ],
-            "on_success": {
-                "command": "echo 'command that uses param {{.param}}'"
-            },
-            "on_failure": {
-                "command": "echo 'command that uses param {{.param}}'"
-            }
+            ]
         },
         {
             "name": "pepito",
